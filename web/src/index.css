@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── MorningCart · the morning counter ─────────────────────────────────────
+   Warm paper, espresso ink, terracotta action, a whisper of grain.        */
+
+@layer base {
+  :root {
+    --grain-opacity: 0.5;
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    background-color: theme('colors.paper');
+    color: theme('colors.ink');
+    font-family: theme('fontFamily.sans');
+    font-size: 0.95rem;
+    /* warm sunrise wash, baked into the paper */
+    background-image:
+      radial-gradient(120% 80% at 100% -10%, rgba(231, 199, 126, 0.30) 0%, rgba(231, 199, 126, 0) 55%),
+      radial-gradient(120% 90% at -10% 0%, rgba(192, 85, 43, 0.10) 0%, rgba(192, 85, 43, 0) 50%);
+    background-attachment: fixed;
+  }
+
+  /* tabular, lining figures for every number — money should never wiggle */
+  .tnum {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: 'tnum' 1, 'lnum' 1;
+  }
+
+  /* visible, branded focus — accessibility is a feature here */
+  *:focus-visible {
+    outline: 2.5px solid theme('colors.clay.DEFAULT');
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  ::selection {
+    background: theme('colors.clay.soft');
+    color: theme('colors.ink');
+  }
+}
+
+@layer components {
+  /* the paper grain — a fixed film over everything, multiply-blended */
+  .grain-film {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    pointer-events: none;
+    opacity: var(--grain-opacity);
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.42'/%3E%3C/svg%3E");
+  }
+
+  /* receipt / ticket — perforated warm edge */
+  .ticket {
+    background:
+      repeating-linear-gradient(theme('colors.card-raised') 0 28px, transparent 28px 29px),
+      theme('colors.card-raised');
+    background-blend-mode: multiply;
+  }
+  .ticket-perf {
+    --d: 9px;
+    -webkit-mask:
+      radial-gradient(var(--d) at var(--d) 50%, transparent 98%, #000) left / 51% 100% repeat-y,
+      radial-gradient(var(--d) at calc(100% - var(--d)) 50%, transparent 98%, #000) right / 51% 100% repeat-y;
+    mask:
+      radial-gradient(var(--d) at var(--d) 50%, transparent 98%, #000) left / 51% 100% repeat-y,
+      radial-gradient(var(--d) at calc(100% - var(--d)) 50%, transparent 98%, #000) right / 51% 100% repeat-y;
+  }
+
+  /* dashed hand-set divider */
+  .rule-dashed {
+    border-top: 1.5px dashed theme('colors.line-strong');
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      theme('colors.wash') 25%,
+      theme('colors.paper-deep') 37%,
+      theme('colors.wash') 63%
+    );
+    background-size: 280% 100%;
+  }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .text-pretty { text-wrap: pretty; }
+  .tap { min-height: 44px; min-width: 44px; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .skeleton { animation: none !important; }
+}

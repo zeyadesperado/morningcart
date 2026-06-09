@@ -1,0 +1,46 @@
+# MorningCart — production-shaped local stack.
+#   docker compose up --build   ->   web at http://localhost:8080
+# web (nginx) is the only published port; it reverse-proxies /api/ to the api
+# service so the auth cookie is always same-origin.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: morningcart
+      POSTGRES_PASSWORD: morningcart
+      POSTGRES_DB: morningcart
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U morningcart -d morningcart"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://morningcart:morningcart@db:5432/morningcart?schema=public
+      # No baked-in secret: set COOKIE_SECRET in the environment (e.g. `openssl rand -hex 32`).
+      # Compose fails loudly if it is unset, so a forgeable default can never ship.
+      COOKIE_SECRET: ${COOKIE_SECRET:?set COOKIE_SECRET (openssl rand -hex 32)}
+      WEB_ORIGIN: http://localhost:8080
+      PORT: "4000"
+      SEED_ON_BOOT: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:
