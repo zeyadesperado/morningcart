@@ -2,17 +2,13 @@
   "name": "morningcart-monorepo",
   "private": true,
   "version": "0.1.0",
-  "workspaces": ["shared", "api", "web"],
+  "workspaces": ["shared", "web"],
   "scripts": {
     "build:shared": "npm run build -w @morningcart/shared",
-    "build": "npm run build:shared && npm run build -w @morningcart/api && npm run build -w @morningcart/web",
-    "typecheck": "npm run build:shared && npm run typecheck -w @morningcart/shared && npm run typecheck -w @morningcart/api && npm run typecheck -w @morningcart/web",
+    "build": "npm run build:shared && npm run build -w @morningcart/web",
+    "typecheck": "npm run build:shared && npm run typecheck -w @morningcart/shared && npm run typecheck -w @morningcart/web",
     "test": "npm run test -w @morningcart/shared",
     "test:shared": "npm run test -w @morningcart/shared",
-    "dev:api": "npm run dev -w @morningcart/api",
-    "dev:web": "npm run dev -w @morningcart/web",
-    "db:generate": "npm run prisma:generate -w @morningcart/api",
-    "db:migrate": "npm run prisma:migrate -w @morningcart/api",
-    "db:seed": "npm run seed -w @morningcart/api"
+    "dev:web": "npm run dev -w @morningcart/web"
   }
 }

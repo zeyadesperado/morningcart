@@ -5,3 +5,11 @@ dist
 *.log
 web/.shots
 .prisma
+
+# python
+.venv/
+__pycache__/
+*.pyc
+staticfiles/
+web/.e2e-shots/
+web/webshoot*.mjs

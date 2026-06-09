@@ -1,18 +1,10 @@
-#!/bin/sh
-# MorningCart API container entrypoint.
-# Runs from /app/api (Dockerfile WORKDIR). Order matters:
-#   1. apply pending migrations against the Postgres in DATABASE_URL
-#   2. optionally seed (idempotent upserts) when SEED_ON_BOOT=true
-#   3. start the server
+#!/usr/bin/env sh
 set -e
 
-echo "[entrypoint] applying migrations..."
-npx prisma migrate deploy
+python manage.py migrate --noinput
 
-if [ "$SEED_ON_BOOT" = "true" ]; then
-  echo "[entrypoint] SEED_ON_BOOT=true — seeding database..."
-  npx tsx prisma/seed.ts
+if [ "${SEED_ON_BOOT:-false}" = "true" ]; then
+  python manage.py seed
 fi
 
-echo "[entrypoint] starting API server..."
-exec npx tsx src/server.ts
+exec gunicorn morningcart.wsgi:application --bind "0.0.0.0:${PORT:-4000}" --workers 3
