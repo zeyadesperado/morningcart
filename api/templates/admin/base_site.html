@@ -10,35 +10,71 @@
 
 {% block extrastyle %}
 <style>
-  /* the morning counter, translated to admin CSS vars */
-  :root {
+  /* The morning counter, translated to admin CSS vars.
+     EVERY variable Django defines is set here (a partial override mixes with
+     the OS dark theme and produces light-on-light inputs), and the selector
+     list ties/beats both dark_mode.css blocks so the palette is identical in
+     every scheme. The admin is light by identity — the toggle is hidden. */
+  :root,
+  html[data-theme="auto"],
+  html[data-theme="light"],
+  html[data-theme="dark"] {
+    color-scheme: light;
+
     --primary: #A1431E;
     --secondary: #2A2018;
     --accent: #C68A2E;
-    --header-bg: #2A2018;
+    --primary-fg: #FFFDF8;
+
+    --body-fg: #2A2018;
+    --body-bg: #FCF8EF;
+    --body-quiet-color: #6E5E44;
+    --body-medium-color: #46402F;
+    --body-loud-color: #1A140E;
+
     --header-color: #F4ECDB;
     --header-branding-color: #FFFDF8;
+    --header-bg: #2A2018;
     --header-link-color: #F4ECDB;
-    --breadcrumbs-bg: #A1431E;
+
     --breadcrumbs-fg: #F6E7DC;
     --breadcrumbs-link-fg: #FFFDF8;
+    --breadcrumbs-bg: #A1431E;
+
     --link-fg: #A1431E;
     --link-hover-color: #C0552B;
+    --link-selected-fg: #8C3A1A;
+
+    --hairline-color: #E3D6BE;
+    --border-color: #A08F6C;
+
+    --error-fg: #9E2B1E;
+
+    --message-success-bg: #E7EBD8;
+    --message-warning-bg: #F4E7C8;
+    --message-error-bg: #F6E7DC;
+
+    --darkened-bg: #F4ECDB;
+    --selected-bg: #EFE6D2;
+    --selected-row: #F6E7DC;
+
+    --button-fg: #FFFDF8;
     --button-bg: #A1431E;
     --button-hover-bg: #8C3A1A;
     --default-button-bg: #2A2018;
     --default-button-hover-bg: #46402F;
+    --close-button-bg: #6E5E44;
+    --close-button-hover-bg: #2A2018;
+    --delete-button-bg: #9E2B1E;
+    --delete-button-hover-bg: #7C2218;
+    --object-tools-fg: #FFFDF8;
     --object-tools-bg: #2A2018;
     --object-tools-hover-bg: #46402F;
   }
-  html[data-theme="light"], :root {
-    --body-bg: #F4ECDB;
-    --darkened-bg: #EFE6D2;
-    --selected-bg: #F6E7DC;
-    --selected-row: #F6E7DC;
-    --hairline-color: #E3D6BE;
-    --border-color: #D2C2A4;
-  }
+
+  /* single light theme -> the toggle would be a no-op; remove it */
+  .theme-toggle { display: none !important; }
+
   #site-name a { font-family: Georgia, 'Times New Roman', serif; letter-spacing: -0.01em; }
   #content h1 { font-family: Georgia, 'Times New Roman', serif; }
 </style>
