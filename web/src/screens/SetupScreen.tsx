@@ -4,7 +4,9 @@ import { egp, money } from '../lib/money'
 import { AppHeader, Screen } from '../components/Shell'
 import { Button } from '../components/Button'
 import { EmptyState, SkeletonList } from '../components/States'
-import { KindDot, Label } from '../components/ui'
+import { KindTag, Label } from '../components/ui'
+
+const KIND_CYCLE: Record<ItemKind, ItemKind> = { plate: 'drink', drink: 'extra', extra: 'plate' }
 
 /** Parse an EGP input; null = leave the stored value alone (blank/invalid). */
 function parseEgp(raw: string): number | null {
@@ -84,6 +86,7 @@ export function SetupScreen({
           <button
             key={x.id}
             onClick={() => onSelect(x.id)}
+            aria-pressed={x.id === r.id}
             className={`tap flex-1 rounded-lg px-3 py-2 text-left font-sans transition-colors ${
               x.id === r.id ? 'bg-ink text-card-raised' : 'bg-card-raised text-ink ring-1 ring-line-strong'
             }`}
@@ -113,7 +116,7 @@ export function SetupScreen({
               if (v && v !== r.name) onPatchRestaurant(r.id, { name: v })
               else e.target.value = r.name
             }}
-            className="w-full rounded-lg bg-card-raised px-3 py-2.5 font-sans text-base font-semibold text-ink ring-1 ring-line-strong focus:ring-clay"
+            className="w-full rounded-lg bg-card-raised px-3 py-2.5 font-sans text-base font-semibold text-ink ring-1 ring-line-bold focus:ring-clay"
           />
         </Field>
 
@@ -121,18 +124,19 @@ export function SetupScreen({
           <input
             key={`${r.id}-arabic`}
             dir="rtl"
+            lang="ar"
             defaultValue={r.arabic ?? ''}
             placeholder="الاسم بالعربي"
             onBlur={(e) => {
               const v = e.target.value.trim()
               if (v !== (r.arabic ?? '')) onPatchRestaurant(r.id, { arabic: v })
             }}
-            className="w-full rounded-lg bg-card-raised px-3 py-2.5 font-sans text-base font-semibold text-ink ring-1 ring-line-strong placeholder:text-ink-faint focus:ring-clay"
+            className="w-full rounded-lg bg-card-raised px-3 py-2.5 font-sans text-base font-semibold text-ink ring-1 ring-line-bold placeholder:text-ink-faint focus:ring-clay"
           />
         </Field>
 
         <Field label="Delivery fee (EGP) · split across everyone who ordered">
-          <div className="inline-flex items-center gap-2 rounded-lg bg-card-raised px-3 py-2 ring-1 ring-line-strong focus-within:ring-clay">
+          <div className="inline-flex items-center gap-2 rounded-lg bg-card-raised px-3 py-2 ring-1 ring-line-bold focus-within:ring-clay">
             <span className="font-sans text-sm font-semibold text-ink-soft">EGP</span>
             <input
               key={`${r.id}-fee`}
@@ -141,6 +145,7 @@ export function SetupScreen({
               min={0}
               step={0.5}
               defaultValue={(r.deliveryFee / 100).toString()}
+              aria-label="Delivery fee in EGP"
               onBlur={(e) => {
                 const v = parseEgp(e.target.value)
                 if (v === null) {
@@ -158,69 +163,80 @@ export function SetupScreen({
           <Label>Items · {r.menu.length}</Label>
           <ul className="mt-1.5 overflow-hidden rounded-lg ring-1 ring-line">
             {r.menu.map((m: MenuItemDTO, i: number) => (
-              <li
-                key={m.id}
-                className={`flex items-center gap-2 bg-card-raised/70 px-2.5 py-2 ${i ? 'border-t border-line/70' : ''}`}
-              >
-                <KindDot kind={m.kind} />
-                <input
-                  defaultValue={m.name}
-                  placeholder="item name"
-                  onBlur={(e) => {
-                    const v = e.target.value.trim()
-                    if (v && v !== m.name) onPatchItem(r.id, m.id, { name: v })
-                    else e.target.value = m.name
-                  }}
-                  className={`min-w-0 flex-1 rounded bg-transparent font-sans text-sm font-semibold text-ink placeholder:text-ink-faint focus:outline-none focus-visible:ring-1 ${
-                    m.available ? '' : 'line-through opacity-60'
-                  }`}
-                />
-                <input
-                  dir="rtl"
-                  defaultValue={m.arabic ?? ''}
-                  placeholder="عربي"
-                  aria-label={`Arabic name for ${m.name || 'item'}`}
-                  onBlur={(e) => {
-                    const v = e.target.value.trim()
-                    if (v !== (m.arabic ?? '')) onPatchItem(r.id, m.id, { arabic: v })
-                  }}
-                  className="w-16 rounded bg-transparent text-right font-sans text-sm text-ink-soft placeholder:text-ink-faint focus:outline-none focus-visible:ring-1"
-                />
-                <div className="inline-flex items-center gap-1 rounded-md bg-paper px-2 py-1 ring-1 ring-line">
+              <li key={m.id} className={`bg-card-raised/70 px-3 py-2.5 ${i ? 'border-t border-line/70' : ''}`}>
+                {/* row 1: names get the full width — no more 10-char truncation */}
+                <div className="flex items-center gap-2">
                   <input
-                    type="number"
-                    min={0}
-                    step={0.5}
-                    defaultValue={(m.price / 100).toString()}
+                    defaultValue={m.name}
+                    placeholder="item name"
+                    aria-label="Item name"
                     onBlur={(e) => {
-                      const v = parseEgp(e.target.value)
-                      if (v === null) {
-                        e.target.value = (m.price / 100).toString()
-                        return
-                      }
-                      if (v !== m.price) onPatchItem(r.id, m.id, { price: v })
+                      const v = e.target.value.trim()
+                      if (v && v !== m.name) onPatchItem(r.id, m.id, { name: v })
+                      else e.target.value = m.name
                     }}
-                    aria-label={`Price for ${m.name || 'item'}`}
-                    className="tnum w-14 bg-transparent text-right font-sans text-sm font-bold text-ink focus:outline-none"
+                    className={`min-w-0 flex-1 rounded bg-transparent font-sans text-sm font-semibold text-ink placeholder:text-ink-faint focus-visible:ring-1 ${
+                      m.available ? '' : 'line-through opacity-60'
+                    }`}
+                  />
+                  <input
+                    dir="rtl"
+                    lang="ar"
+                    defaultValue={m.arabic ?? ''}
+                    placeholder="عربي"
+                    aria-label={`Arabic name for ${m.name || 'item'}`}
+                    onBlur={(e) => {
+                      const v = e.target.value.trim()
+                      if (v !== (m.arabic ?? '')) onPatchItem(r.id, m.id, { arabic: v })
+                    }}
+                    className="w-24 rounded bg-transparent text-right font-sans text-sm text-ink-soft placeholder:text-ink-faint focus-visible:ring-1"
                   />
                 </div>
-                <button
-                  onClick={() => onPatchItem(r.id, m.id, { available: !m.available })}
-                  aria-label={m.available ? `Mark ${m.name || 'item'} unavailable` : `Mark ${m.name || 'item'} available`}
-                  title={m.available ? 'Available — tap to hide from ordering' : 'Unavailable — tap to bring back'}
-                  className={`tap grid h-9 w-9 shrink-0 place-items-center rounded-md text-base ${
-                    m.available ? 'text-sage-deep hover:bg-wash' : 'text-ink-faint hover:bg-wash'
-                  }`}
-                >
-                  {m.available ? '◉' : '○'}
-                </button>
-                <button
-                  onClick={() => onRemoveItem(r.id, m.id)}
-                  aria-label={`Remove ${m.name || 'item'}`}
-                  className="tap grid h-9 w-9 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-clay-wash hover:text-clay-deep"
-                >
-                  ✕
-                </button>
+                {/* row 2: the controls */}
+                <div className="mt-1.5 flex items-center gap-2">
+                  <KindTag kind={m.kind} onCycle={() => onPatchItem(r.id, m.id, { kind: KIND_CYCLE[m.kind] ?? 'plate' })} />
+                  <div className="inline-flex items-center gap-1 rounded-md bg-paper px-2 py-1 ring-1 ring-line">
+                    <span className="font-sans text-2xs font-semibold text-ink-faint">EGP</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      step={0.5}
+                      defaultValue={(m.price / 100).toString()}
+                      onBlur={(e) => {
+                        const v = parseEgp(e.target.value)
+                        if (v === null) {
+                          e.target.value = (m.price / 100).toString()
+                          return
+                        }
+                        if (v !== m.price) onPatchItem(r.id, m.id, { price: v })
+                      }}
+                      aria-label={`Price for ${m.name || 'item'}`}
+                      className="tnum w-16 bg-transparent text-right font-sans text-sm font-bold text-ink focus-visible:ring-1"
+                    />
+                  </div>
+                  <div className="flex-1" />
+                  <button
+                    onClick={() => onPatchItem(r.id, m.id, { available: !m.available })}
+                    aria-pressed={!m.available}
+                    aria-label={m.available ? `Mark ${m.name || 'item'} unavailable` : `Mark ${m.name || 'item'} available`}
+                    title={m.available ? 'Available — tap to hide from ordering' : 'Unavailable — tap to bring back'}
+                    className={`tap rounded-md px-2 font-sans text-2xs font-bold ${
+                      m.available ? 'text-sage-deep hover:bg-wash' : 'text-ink-faint hover:bg-wash'
+                    }`}
+                  >
+                    {m.available ? '◉ on' : '○ off'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm(`Remove “${m.name || 'this item'}” from the menu?`)) onRemoveItem(r.id, m.id)
+                    }}
+                    aria-label={`Remove ${m.name || 'item'}`}
+                    className="tap ml-2 grid h-9 w-9 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-clay-wash hover:text-clay-deep"
+                  >
+                    ✕
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -230,17 +246,21 @@ export function SetupScreen({
             </Button>
           </div>
           <p className="mt-2 px-1 font-sans text-xs text-ink-faint">
-            ◉ = orderable this morning. Items that were ever ordered can’t be removed — mark them ○ unavailable instead.
+            ◉ = orderable this morning. Items that were ever ordered can’t be removed — switch them ○ off instead.
           </p>
         </div>
       </div>
-      <button
-        onClick={() => onDeleteRestaurant(r.id)}
-        className="mt-6 w-full rounded-lg py-2.5 font-sans text-sm font-bold text-clay-deep ring-1 ring-clay/30 transition-colors hover:bg-clay-wash"
-      >
-        Delete “{r.name}”
-      </button>
-      <div className="h-10" />
+
+      {/* danger zone — quiet, below the fold, never dressed like an action */}
+      <div className="rule-dashed mt-10 pt-4">
+        <button
+          onClick={() => onDeleteRestaurant(r.id)}
+          className="tap w-full py-2 text-center font-sans text-sm font-semibold text-ink-soft underline decoration-line-strong underline-offset-4 hover:text-clay-deep"
+        >
+          Delete “{r.name}”
+        </button>
+      </div>
+      <div className="h-6" />
     </Screen>
   )
 }

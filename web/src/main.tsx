@@ -12,7 +12,7 @@ const queryClient = new QueryClient({
   mutationCache: new MutationCache({
     onError: (error, _variables, _context, mutation) => {
       if (mutation.meta?.silentError) return
-      notifyError(error instanceof Error ? error.message : 'Something went wrong')
+      notifyError(error instanceof Error ? error.message : 'That didn’t go through — give it another try.')
     },
   }),
 })

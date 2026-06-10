@@ -25,7 +25,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     headers,
   })
   if (!res.ok) {
-    let message = res.statusText
+    let message = res.statusText || 'The kitchen didn’t answer — try again.'
     try {
       const body = await res.json()
       if (body?.error) message = body.error

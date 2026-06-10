@@ -4,6 +4,10 @@
 // Paper + espresso ink + one terracotta action accent + sage for "settled".
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
+  future: {
+    // touch devices must not keep :hover styles stuck after a tap
+    hoverOnlyWhenSupported: true,
+  },
   theme: {
     extend: {
       colors: {
@@ -15,10 +19,11 @@ export default {
         // ink / text
         ink: '#2A2018',
         'ink-soft': '#6B5B49',
-        'ink-faint': '#79694F',
+        'ink-faint': '#6E5E44', // 5.3:1 on paper — stays AA under the grain film
         // hairlines & wash
         line: '#E3D6BE',
         'line-strong': '#D2C2A4',
+        'line-bold': '#A08F6C', // interactive-field borders only (3:1 on card-raised)
         wash: '#EFE6D2',
         // terracotta — THE action
         clay: {

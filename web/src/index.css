@@ -7,8 +7,15 @@
 
 @layer base {
   :root {
-    --grain-opacity: 0.5;
+    /* kept light — at 0.5 the multiply grain pushed quiet text below WCAG AA */
+    --grain-opacity: 0.25;
     color-scheme: light;
+  }
+
+  /* Android pull-to-refresh must not nuke a half-built order draft */
+  html,
+  body {
+    overscroll-behavior-y: none;
   }
 
   html {
@@ -70,13 +77,14 @@
     background-blend-mode: multiply;
   }
   .ticket-perf {
+    /* 26px tile -> punched holes run down BOTH edges, like a real receipt */
     --d: 9px;
     -webkit-mask:
-      radial-gradient(var(--d) at var(--d) 50%, transparent 98%, #000) left / 51% 100% repeat-y,
-      radial-gradient(var(--d) at calc(100% - var(--d)) 50%, transparent 98%, #000) right / 51% 100% repeat-y;
+      radial-gradient(var(--d) at var(--d) 50%, transparent 98%, #000) left / 51% 26px repeat-y,
+      radial-gradient(var(--d) at calc(100% - var(--d)) 50%, transparent 98%, #000) right / 51% 26px repeat-y;
     mask:
-      radial-gradient(var(--d) at var(--d) 50%, transparent 98%, #000) left / 51% 100% repeat-y,
-      radial-gradient(var(--d) at calc(100% - var(--d)) 50%, transparent 98%, #000) right / 51% 100% repeat-y;
+      radial-gradient(var(--d) at var(--d) 50%, transparent 98%, #000) left / 51% 26px repeat-y,
+      radial-gradient(var(--d) at calc(100% - var(--d)) 50%, transparent 98%, #000) right / 51% 26px repeat-y;
   }
 
   /* dashed hand-set divider */
@@ -98,7 +106,7 @@
 @layer utilities {
   .text-balance { text-wrap: balance; }
   .text-pretty { text-wrap: pretty; }
-  .tap { min-height: 44px; min-width: 44px; }
+  .tap { min-height: 44px; min-width: 44px; touch-action: manipulation; }
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 }

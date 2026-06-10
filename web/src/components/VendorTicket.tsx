@@ -7,11 +7,11 @@ import { Label } from './ui'
 
 const KIND_LABEL: Record<string, string> = { plate: 'Plates', drink: 'Drinks', extra: 'Extras' }
 
-export function VendorTicket({ result, restaurant }: { result: CloseResult; restaurant: Restaurant }) {
-  const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle')
-  const kindOf = (id: string) => restaurant.menu.find((m) => m.id === id)?.kind ?? 'plate'
-  const order: Array<'plate' | 'drink' | 'extra'> = ['plate', 'drink', 'extra']
+export type CopyState = 'idle' | 'ok' | 'fail'
 
+/** Copy-the-ticket behavior, shared by the ticket header and the thumb dock. */
+export function useCopyTicket(result: CloseResult, restaurant: Restaurant) {
+  const [copied, setCopied] = useState<CopyState>('idle')
   const copy = async () => {
     const text = aggregateToText(result, restaurant)
     let ok = false
@@ -38,9 +38,21 @@ export function VendorTicket({ result, restaurant }: { result: CloseResult; rest
     setCopied(ok ? 'ok' : 'fail') // never flash success for a failed copy
     setTimeout(() => setCopied('idle'), 1900)
   }
+  return { copied, copy }
+}
+
+export function VendorTicket({ result, restaurant }: { result: CloseResult; restaurant: Restaurant }) {
+  const { copied, copy } = useCopyTicket(result, restaurant)
+  const kindOf = (id: string) => restaurant.menu.find((m) => m.id === id)?.kind ?? 'plate'
+  const order: Array<'plate' | 'drink' | 'extra'> = ['plate', 'drink', 'extra']
 
   return (
-    <div className="ticket ticket-perf rounded-lg px-5 py-5 shadow-card">
+    <motion.div
+      // tear-off: a successful copy gives the receipt a little tug
+      animate={copied === 'ok' ? { rotate: [0, -0.7, 0.5, 0], y: [0, 2, 0] } : {}}
+      transition={{ duration: 0.35 }}
+      className="ticket ticket-perf rounded-lg px-5 py-5 shadow-card"
+    >
       <span className="sr-only" role="status" aria-live="polite">
         {copied === 'ok' ? 'Order copied to clipboard' : copied === 'fail' ? 'Copy failed' : ''}
       </span>
@@ -49,26 +61,12 @@ export function VendorTicket({ result, restaurant }: { result: CloseResult; rest
           <Label>The order · for the vendor</Label>
           <h3 className="mt-1 font-display text-xl font-semibold text-ink">
             {restaurant.name}{' '}
-            <span className="font-sans text-sm font-medium text-ink-faint" dir="rtl">
+            <span className="font-sans text-sm font-medium text-ink-faint" dir="rtl" lang="ar">
               {restaurant.arabic}
             </span>
           </h3>
         </div>
-        <motion.button
-          type="button"
-          onClick={copy}
-          whileTap={{ scale: 0.95 }}
-          aria-label="Copy the order to send on WhatsApp"
-          className={`tap shrink-0 rounded-lg px-3.5 py-2 font-sans text-sm font-bold ring-1 transition-colors ${
-            copied === 'ok'
-              ? 'bg-sage text-card-raised ring-sage-deep'
-              : copied === 'fail'
-                ? 'bg-clay text-card-raised ring-clay-deep'
-                : 'bg-ink text-card-raised ring-ink hover:bg-ink/90'
-          }`}
-        >
-          {copied === 'ok' ? '✓ Copied' : copied === 'fail' ? '✗ Couldn’t copy' : 'Copy'}
-        </motion.button>
+        <CopyButton copied={copied} onCopy={copy} />
       </div>
 
       <div className="mt-4 font-mono text-sm text-ink">
@@ -110,6 +108,42 @@ export function VendorTicket({ result, restaurant }: { result: CloseResult; rest
           <span className="tnum">EGP {money(result.grandTotal)}</span>
         </div>
       </div>
-    </div>
+    </motion.div>
+  )
+}
+
+export function CopyButton({
+  copied,
+  onCopy,
+  label = 'Copy',
+}: {
+  copied: CopyState
+  onCopy: () => void
+  label?: string
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onCopy}
+      whileTap={{ scale: 0.95 }}
+      aria-label="Copy the order to send on WhatsApp"
+      className={`tap shrink-0 whitespace-nowrap rounded-lg px-3.5 py-2 font-sans text-sm font-bold ring-1 transition-colors ${
+        copied === 'ok'
+          ? 'bg-sage text-card-raised ring-sage-deep'
+          : copied === 'fail'
+            ? 'bg-clay-deep text-card-raised ring-clay-deep'
+            : 'bg-ink text-card-raised ring-ink hover:bg-ink/90'
+      }`}
+    >
+      {copied === 'ok' ? (
+        <motion.span initial={{ scale: 1.4 }} animate={{ scale: 1 }} className="inline-block">
+          ✓ Copied
+        </motion.span>
+      ) : copied === 'fail' ? (
+        '✗ Couldn’t copy'
+      ) : (
+        label
+      )}
+    </motion.button>
   )
 }

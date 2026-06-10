@@ -1,16 +1,15 @@
-import { useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { useEffect, useState } from 'react'
 import type { ItemKind, MenuItem, Restaurant } from '../types'
 import { egp } from '../lib/money'
 import type { LineDraft } from '../components/MenuItemRow'
 import { MenuItemRow } from '../components/MenuItemRow'
 import { RunningSubtotal } from '../components/RunningSubtotal'
-import { AppHeader, Screen } from '../components/Shell'
+import { AppHeader, Screen, ThumbDock } from '../components/Shell'
 import { StatusBadge } from '../components/StatusBadge'
 import { SkeletonList, EmptyState, ErrorState, RetryBanner } from '../components/States'
-import { Avatar, Label, Money } from '../components/ui'
+import { Avatar, Label } from '../components/ui'
 
-export type ComposeVariant = 'default' | 'loading' | 'empty' | 'error' | 'submit-error' | 'summary' | 'closed'
+export type ComposeVariant = 'default' | 'loading' | 'empty' | 'error' | 'submit-error' | 'just-closed'
 
 const KIND_LABEL: Record<string, string> = { plate: 'Plates', drink: 'Drinks', extra: 'Extras' }
 const KIND_ORDER: Array<'plate' | 'drink' | 'extra'> = ['plate', 'drink', 'extra']
@@ -23,7 +22,6 @@ export function ComposeScreen({
   variant,
   onSubmit,
   onRetry,
-  onEdit,
   onGoTable,
   onGoSetup,
   onAddMenuItem,
@@ -36,7 +34,6 @@ export function ComposeScreen({
   variant: ComposeVariant
   onSubmit: () => void
   onRetry: () => void
-  onEdit: () => void
   onGoTable: () => void
   onGoSetup: () => void
   onAddMenuItem: (data: { name: string; price: number; kind: ItemKind }) => Promise<unknown>
@@ -53,20 +50,25 @@ export function ComposeScreen({
       <span className="pr-1 font-sans text-xs font-semibold text-ink-soft">{you}</span>
     </span>
   )
+  const headerRight = (
+    <div className="flex items-center gap-2">
+      <StatusBadge status="open" />
+      {youChip}
+    </div>
+  )
 
   const TitleRow = (
-    <div className="flex items-end justify-between gap-3 pb-3">
-      <div>
-        <Label>This morning</Label>
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">
-          What are you<br />having?
-        </h1>
-        <p className="mt-1 font-sans text-sm text-ink-soft">
-          from <span className="font-semibold text-ink">{restaurant.name}</span>{' '}
-          <span dir="rtl" className="text-ink-faint">{restaurant.arabic}</span>
-        </p>
-      </div>
-      <StatusBadge status="open" />
+    <div className="pb-3">
+      <Label>This morning</Label>
+      <h1 className="font-display text-3xl font-semibold tracking-tight text-ink text-balance">
+        What are you having?
+      </h1>
+      <p className="mt-1 font-sans text-sm text-ink-soft">
+        from <span className="font-semibold text-ink">{restaurant.name}</span>{' '}
+        <span dir="rtl" lang="ar" className="text-ink-faint">
+          {restaurant.arabic}
+        </span>
+      </p>
     </div>
   )
 
@@ -75,6 +77,7 @@ export function ComposeScreen({
       <Screen scrollKey="compose-loading">
         <AppHeader right={youChip} />
         {TitleRow}
+        <Label className="pb-2">Reading the menu…</Label>
         <SkeletonList rows={7} />
       </Screen>
     )
@@ -103,64 +106,17 @@ export function ComposeScreen({
     )
   }
 
-  // submitted summary OR closed read-only
-  if (variant === 'summary' || variant === 'closed') {
-    const mine = restaurant.menu
-      .map((m) => ({ m, d: lineFor(m.id) }))
-      .filter((x) => x.d.qty > 0)
-    const closed = variant === 'closed'
+  // someone closed the order mid-draft — retry can never succeed, be honest
+  if (variant === 'just-closed') {
     return (
-      <Screen scrollKey="compose-summary">
+      <Screen scrollKey="compose-just-closed">
         <AppHeader right={youChip} />
-        <div className="flex items-end justify-between gap-3 pb-4">
-          <div>
-            <Label>{closed ? 'Ordering closed' : 'You’re in'}</Label>
-            <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">
-              {closed ? 'Your order' : 'Locked in ☕'}
-            </h1>
-          </div>
-          <StatusBadge status={closed ? 'closed' : 'open'} />
-        </div>
-        <div className="rounded-xl bg-card-raised p-4 shadow-card ring-1 ring-line">
-          <ul className="divide-y divide-line/70">
-            {mine.map(({ m, d }) => (
-              <li key={m.id} className="flex items-baseline gap-2 py-2">
-                <span className="tnum w-6 font-bold text-clay-deep">{d.qty}×</span>
-                <span className="flex-1 font-sans text-base font-semibold text-ink">
-                  {m.name}
-                  {d.note && <span className="font-normal text-ink-faint"> · {d.note}</span>}
-                  {d.forName && <span className="font-semibold text-[#8a5e16]"> · for {d.forName}</span>}
-                </span>
-                <Money p={m.price * d.qty} className="text-sm font-semibold text-ink-soft" />
-              </li>
-            ))}
-          </ul>
-          <div className="rule-dashed mt-2 flex items-baseline justify-between pt-3">
-            <span className="font-sans text-sm font-semibold text-ink-soft">Your items</span>
-            <Money p={subtotal} unit className="font-display text-xl font-semibold text-ink" />
-          </div>
-        </div>
-        <p className="mt-3 px-1 font-sans text-sm text-ink-soft">
-          {closed
-            ? 'The order’s been closed and sent. Final cost lands on the table view.'
-            : 'You can change this until someone closes the order.'}
-        </p>
-        <div className="mt-auto flex gap-2 pb-5 pt-4">
-          {!closed && (
-            <button
-              onClick={onEdit}
-              className="tap flex-1 rounded-lg bg-card-raised py-3 font-sans text-sm font-bold text-ink ring-1 ring-line-strong"
-            >
-              Edit my order
-            </button>
-          )}
-          <button
-            onClick={onGoTable}
-            className="tap flex-1 rounded-lg bg-ink py-3 font-sans text-sm font-bold text-card-raised"
-          >
-            See the table →
-          </button>
-        </div>
+        <EmptyState
+          icon="☕"
+          title="Ordering just closed"
+          body="Someone closed the order while you were picking. Your picks are saved as a draft for next time."
+          action={{ label: 'See the table →', onClick: onGoTable }}
+        />
       </Screen>
     )
   }
@@ -168,7 +124,7 @@ export function ComposeScreen({
   // default composing
   return (
     <Screen scrollKey="compose">
-      <AppHeader right={youChip} />
+      <AppHeader right={headerRight} />
       {TitleRow}
       {variant === 'submit-error' && <RetryBanner onRetry={onRetry} />}
       <div className="space-y-4 pb-2">
@@ -193,38 +149,40 @@ export function ComposeScreen({
 
       <AddMenuItemForm onAdd={onAddMenuItem} />
 
-      <AnimatePresence>
-        {itemCount > 0 && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <RunningSubtotal
-              subtotal={subtotal}
-              itemCount={itemCount}
-              ctaLabel="Add to the table →"
-              onCta={onSubmit}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {itemCount === 0 && (
-        <div className="mt-auto space-y-3 pb-6 pt-8 text-center">
+        <div className="mt-auto space-y-3 pb-2 pt-8 text-center">
           <p className="font-sans text-sm text-ink-faint">
             Tap <span className="font-semibold text-clay-deep">Add</span> on anything to start your order
           </p>
-          {onRemoveOrder && (
-            <button
-              onClick={onRemoveOrder}
-              className="tap w-full rounded-lg py-2.5 font-sans text-sm font-bold text-clay-deep ring-1 ring-clay/30 hover:bg-clay-wash"
-            >
-              Remove my order — frees my delivery share
-            </button>
-          )}
+          {onRemoveOrder && <RemoveOrderButton onRemove={onRemoveOrder} />}
           <button onClick={onGoTable} className="tap w-full py-2 font-sans text-sm font-semibold text-ink-soft">
             Just looking? See the table →
           </button>
         </div>
       )}
+
+      <ThumbDock show={itemCount > 0}>
+        <RunningSubtotal subtotal={subtotal} itemCount={itemCount} ctaLabel="Add to the table →" onCta={onSubmit} />
+      </ThumbDock>
     </Screen>
+  )
+}
+
+// removing an order frees a delivery share for everyone else — one step back
+function RemoveOrderButton({ onRemove }: { onRemove: () => void }) {
+  const [arm, setArm] = useState(false)
+  useEffect(() => {
+    if (!arm) return
+    const t = setTimeout(() => setArm(false), 3500)
+    return () => clearTimeout(t)
+  }, [arm])
+  return (
+    <button
+      onClick={() => (arm ? onRemove() : setArm(true))}
+      className="tap w-full rounded-lg py-2.5 font-sans text-sm font-bold text-clay-deep ring-1 ring-clay/30 hover:bg-clay-wash"
+    >
+      {arm ? 'Really remove? Tap again ✓' : 'Remove my order — frees my delivery share'}
+    </button>
   )
 }
 
@@ -256,7 +214,7 @@ function AddMenuItemForm({ onAdd }: { onAdd: (d: { name: string; price: number; 
     return (
       <button
         onClick={() => setOpen(true)}
-        className="mb-2 w-full rounded-lg border border-dashed border-line-strong py-2.5 font-sans text-sm font-semibold text-ink-soft transition-colors hover:border-clay hover:text-clay-deep"
+        className="tap mb-2 w-full rounded-lg border border-dashed border-line-strong py-3 font-sans text-sm font-semibold text-ink-soft transition-colors hover:border-clay hover:text-clay-deep"
       >
         ＋ Add an item to the menu
       </button>
@@ -267,22 +225,25 @@ function AddMenuItemForm({ onAdd }: { onAdd: (d: { name: string; price: number; 
       <div className="flex gap-2">
         <input
           autoFocus
+          onFocus={(e) => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' })}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && submit()}
           placeholder="Item name"
-          className="min-w-0 flex-1 rounded-md bg-paper px-2.5 py-2 font-sans text-sm font-semibold text-ink ring-1 ring-line-strong focus:ring-clay"
+          aria-label="New item name"
+          className="min-w-0 flex-1 rounded-md bg-paper px-2.5 py-2 font-sans text-sm font-semibold text-ink ring-1 ring-line-bold placeholder:text-ink-faint focus:ring-clay"
         />
         <input
           value={price}
           onChange={(e) => setPrice(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && submit()}
           type="number"
+          inputMode="decimal"
           min={0}
           step={0.5}
           placeholder="EGP"
           aria-label="Price in EGP"
-          className="tnum w-20 rounded-md bg-paper px-2 py-2 text-right font-sans text-sm font-bold text-ink ring-1 ring-line-strong focus:ring-clay"
+          className="tnum w-20 rounded-md bg-paper px-2 py-2 text-right font-sans text-sm font-bold text-ink ring-1 ring-line-bold placeholder:text-ink-faint focus:ring-clay"
         />
       </div>
       <div className="mt-2 flex items-center gap-2">
@@ -290,7 +251,8 @@ function AddMenuItemForm({ onAdd }: { onAdd: (d: { name: string; price: number; 
           <button
             key={k}
             onClick={() => setKind(k)}
-            className={`rounded-full px-2.5 py-1 font-sans text-xs font-semibold capitalize ${
+            aria-pressed={kind === k}
+            className={`tap rounded-full px-3 font-sans text-xs font-semibold capitalize ${
               kind === k ? 'bg-ink text-card-raised' : 'bg-card text-ink-soft ring-1 ring-line-strong'
             }`}
           >
@@ -298,13 +260,16 @@ function AddMenuItemForm({ onAdd }: { onAdd: (d: { name: string; price: number; 
           </button>
         ))}
         <div className="flex-1" />
-        <button onClick={() => setOpen(false)} className="px-2 py-1 font-sans text-xs font-semibold text-ink-faint">
+        <button
+          onClick={() => setOpen(false)}
+          className="tap px-3 font-sans text-xs font-semibold text-ink-faint"
+        >
           Cancel
         </button>
         <button
           onClick={submit}
           disabled={busy}
-          className="tap rounded-md bg-clay px-3 py-1.5 font-sans text-xs font-bold text-card-raised disabled:opacity-50"
+          className="tap rounded-md bg-clay-deep px-3.5 font-sans text-xs font-bold text-card-raised disabled:opacity-50"
         >
           {busy ? 'Adding…' : 'Add'}
         </button>

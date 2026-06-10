@@ -80,11 +80,12 @@ export function MenuItemRow({
               {showNote && (
                 <input
                   autoFocus
+                  onFocus={(e) => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' })}
                   value={draft.note ?? ''}
                   onChange={(e) => onChange({ ...draft, note: e.target.value })}
-                  placeholder="no sugar, no oil…"
+                  placeholder="من غير زيت · no sugar…"
                   aria-label={`Note for ${item.name}`}
-                  className="min-w-0 flex-1 rounded-md bg-card-raised px-2.5 py-1.5 font-sans text-sm text-ink ring-1 ring-line-strong placeholder:text-ink-faint focus:ring-clay"
+                  className="min-w-0 flex-1 rounded-md bg-card-raised px-2.5 py-1.5 font-sans text-sm text-ink ring-1 ring-line-bold placeholder:text-ink-faint focus:ring-clay"
                 />
               )}
               {showFor && (
@@ -92,6 +93,7 @@ export function MenuItemRow({
                   <span className="font-sans text-xs font-semibold text-[#8a5e16]">for</span>
                   <input
                     autoFocus
+                    onFocus={(e) => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' })}
                     value={draft.forName ?? ''}
                     onChange={(e) => onChange({ ...draft, forName: e.target.value })}
                     placeholder="Ziad"
@@ -113,7 +115,7 @@ function Chip({ children, onClick }: { children: React.ReactNode; onClick: () =>
     <button
       type="button"
       onClick={onClick}
-      className="rounded-full px-2.5 py-1 font-sans text-xs font-semibold text-ink-soft ring-1 ring-line-strong transition-colors hover:bg-card-raised hover:text-ink"
+      className="tap rounded-full px-3 py-2 font-sans text-xs font-semibold text-ink-soft ring-1 ring-line-strong transition-colors hover:bg-card-raised hover:text-ink"
     >
       {children}
     </button>

@@ -4,8 +4,9 @@ import type { ReactNode } from 'react'
 type Variant = 'primary' | 'ghost' | 'soft' | 'quiet'
 
 const VARIANTS: Record<Variant, string> = {
+  // clay-deep base: 6.2:1 with card-raised text — AA even under the grain film
   primary:
-    'bg-clay text-card-raised shadow-clay hover:bg-clay-deep active:bg-clay-deep ring-1 ring-clay-deep/40',
+    'bg-clay-deep text-card-raised shadow-clay hover:bg-[#8C3A1A] active:bg-[#8C3A1A] ring-1 ring-clay-deep/40',
   soft: 'bg-clay-wash text-clay-deep ring-1 ring-clay/20 hover:bg-clay-soft/60',
   ghost:
     'bg-card-raised text-ink ring-1 ring-line-strong hover:bg-card hover:ring-ink/20',

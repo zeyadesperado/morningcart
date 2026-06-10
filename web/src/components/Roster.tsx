@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import type { Order, Restaurant } from '../types'
 import { Avatar } from './ui'
 
@@ -14,7 +14,8 @@ export function lineSummary(order: Order, r: Restaurant): string {
     .join(' · ')
 }
 
-// "14 in" — the warm, alive heartbeat of an open session.
+// "14 in" — the warm, alive heartbeat of an open session. The numeral rolls
+// when someone joins (polling streams arrivals every 7s).
 export function RosterHeader({ orders }: { orders: Order[] }) {
   const shown = orders.slice(-6)
   return (
@@ -33,7 +34,20 @@ export function RosterHeader({ orders }: { orders: Order[] }) {
         ))}
       </div>
       <p className="font-sans text-sm text-ink-soft" aria-live="polite">
-        <span className="font-display text-xl font-semibold text-ink">{orders.length}</span>{' '}
+        <span className="inline-block min-w-[0.7em] pr-1 text-center">
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.span
+              key={orders.length}
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -10, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              className="inline-block font-display text-xl font-semibold text-ink tnum"
+            >
+              {orders.length}
+            </motion.span>
+          </AnimatePresence>
+        </span>{' '}
         <span className="font-semibold">in</span> this morning
       </p>
     </div>
@@ -45,22 +59,29 @@ export function OrderCard({
   restaurant,
   index = 0,
   highlight = false,
+  landing = false,
 }: {
   order: Order
   restaurant: Restaurant
   index?: number
   highlight?: boolean
+  /** just submitted — drop onto the table with a satisfying spring */
+  landing?: boolean
 }) {
   const forNames = [...new Set(order.lines.map((l) => l.forName).filter(Boolean))] as string[]
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: Math.min(index * 0.035, 0.4), ease: [0.22, 1, 0.36, 1] }}
+      initial={landing ? { opacity: 0, y: -18, scale: 1.06 } : { opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={
+        landing
+          ? { type: 'spring', stiffness: 380, damping: 22 }
+          : { delay: Math.min(index * 0.035, 0.4), ease: [0.22, 1, 0.36, 1] }
+      }
       className={`flex items-start gap-3 rounded-lg px-3 py-2.5 ${
         highlight ? 'bg-clay-wash ring-1 ring-clay/25' : 'bg-card/60'
-      }`}
+      } ${landing ? 'shadow-lift' : ''}`}
     >
       <Avatar name={order.person} />
       <div className="min-w-0 flex-1">

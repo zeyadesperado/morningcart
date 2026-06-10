@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { MotionConfig } from 'framer-motion'
 import type { CloseResult, Restaurant } from './types'
 import type { LineDraft } from './components/MenuItemRow'
-import type { OrderLineInput, RestaurantDTO, ResultDTO, SessionDTO } from './api/client'
+import { ApiError, type OrderLineInput, type RestaurantDTO, type ResultDTO, type SessionDTO } from './api/client'
 import {
   keys,
   useCancelSession,
@@ -23,6 +23,7 @@ import { AppHeader, GrainFilm, Screen } from './components/Shell'
 import { ErrorState, SkeletonList } from './components/States'
 import { AppNav } from './components/AppNav'
 import { ErrorToast } from './components/Toast'
+import { Label } from './components/ui'
 import { ComposeScreen } from './screens/ComposeScreen'
 import { SessionScreen } from './screens/SessionScreen'
 import { ResultScreen } from './screens/ResultScreen'
@@ -72,6 +73,7 @@ function Splash() {
     <Screen scrollKey="splash">
       <AppHeader />
       <div className="py-6">
+        <Label className="pb-3">Setting the table…</Label>
         <SkeletonList rows={6} />
       </div>
     </Screen>
@@ -110,6 +112,13 @@ function Authed({ you }: { you: string }) {
   const [setupId, setSetupId] = useState<string | null>(null)
   // closed-table escape hatch: show StartScreen again for a second round today
   const [startAnother, setStartAnother] = useState(false)
+  // "you're in" — one short beat of ceremony after submitting
+  const [justSubmitted, setJustSubmitted] = useState(false)
+  useEffect(() => {
+    if (!justSubmitted) return
+    const t = setTimeout(() => setJustSubmitted(false), 2200)
+    return () => clearTimeout(t)
+  }, [justSubmitted])
 
   const nav = (
     <AppNav you={you} onHome={() => setView('home')} onSetup={() => setView('setup')} onLogout={() => logout.mutate()} />
@@ -221,7 +230,10 @@ function Authed({ you }: { you: string }) {
           session={session}
           restaurant={restaurant}
           you={you}
-          onSubmitted={() => setView('session')}
+          onSubmitted={() => {
+            setJustSubmitted(true)
+            setView('session')
+          }}
           onGoTable={() => setView('session')}
           onGoSetup={() => setView('setup')}
         />
@@ -238,10 +250,9 @@ function Authed({ you }: { you: string }) {
         orders={toOrders(session)}
         you={you}
         variant="default"
-        onClose={() => {
-          setView('result')
-          close.mutate(session.id)
-        }}
+        closePending={close.isPending}
+        justSubmitted={justSubmitted}
+        onClose={() => close.mutate(session.id, { onSuccess: () => setView('result') })}
         onCancelSession={
           session.orders.length === 0
             ? () => cancelSession.mutate(session.id, { onSuccess: () => setView('home') })
@@ -303,7 +314,8 @@ function ResultView({ session, restaurant }: { session: SessionDTO; restaurant: 
   return <ResultScreen result={res.result} restaurant={restaurant} variant="default" onTogglePaid={onTogglePaid} onRetry={() => {}} />
 }
 
-// ── Compose wrapper: owns the draft (seeded from my existing order) + mutation ─
+// ── Compose wrapper: owns the draft (seeded from my order, kept in
+//    sessionStorage so a pull-to-refresh or tab death can't eat it) ───────────
 function ComposeView({
   session,
   restaurant,
@@ -323,13 +335,37 @@ function ComposeView({
   const removeOrder = useDeleteOrder()
   const rmut = useRestaurantMutations()
   const mine = session.orders.find((o) => o.person === you)
-  const [draft, setDraft] = useState<Record<string, LineDraft>>(() =>
-    mine
+  const storageKey = `draft:${session.id}:${you}`
+  const [draft, setDraft] = useState<Record<string, LineDraft>>(() => {
+    try {
+      const saved = sessionStorage.getItem(storageKey)
+      if (saved) return JSON.parse(saved)
+    } catch {
+      /* private mode / quota — in-memory only */
+    }
+    return mine
       ? Object.fromEntries(
           mine.lines.map((l) => [l.menuItemId, { qty: l.qty, note: l.note ?? undefined, forName: l.forName ?? undefined }]),
         )
-      : {},
-  )
+      : {}
+  })
+  const changeDraft = (itemId: string, d: LineDraft) =>
+    setDraft((p) => {
+      const next = { ...p, [itemId]: d }
+      try {
+        sessionStorage.setItem(storageKey, JSON.stringify(next))
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  const clearDraft = () => {
+    try {
+      sessionStorage.removeItem(storageKey)
+    } catch {
+      /* ignore */
+    }
+  }
 
   const lines: OrderLineInput[] = restaurant.menu
     .filter((m) => (draft[m.id]?.qty ?? 0) > 0)
@@ -337,29 +373,45 @@ function ComposeView({
 
   const submit = () => {
     if (!lines.length) return
-    upsert.mutate({ sessionId: session.id, lines }, { onSuccess: onSubmitted })
+    upsert.mutate(
+      { sessionId: session.id, lines },
+      {
+        onSuccess: () => {
+          clearDraft()
+          onSubmitted()
+        },
+      },
+    )
   }
 
   // quick-added items land at the end of the menu, not on top of it
   const nextSortOrder = session.restaurant.menu.reduce((mx, m) => Math.max(mx, m.sortOrder), -1) + 1
 
-  const variant = restaurant.menu.length === 0 ? 'empty' : upsert.isError ? 'submit-error' : 'default'
+  const justClosed = upsert.error instanceof ApiError && upsert.error.status === 409
+  const variant = restaurant.menu.length === 0 ? 'empty' : justClosed ? 'just-closed' : upsert.isError ? 'submit-error' : 'default'
 
   return (
     <ComposeScreen
       restaurant={restaurant}
       you={you}
       draft={draft}
-      onDraftChange={(itemId, d) => setDraft((p) => ({ ...p, [itemId]: d }))}
+      onDraftChange={changeDraft}
       variant={variant}
       onSubmit={submit}
       onRetry={submit}
-      onEdit={() => {}}
       onGoTable={onGoTable}
       onGoSetup={onGoSetup}
       onAddMenuItem={(d) => rmut.addItem.mutateAsync({ id: restaurant.id, data: { ...d, sortOrder: nextSortOrder } })}
       onRemoveOrder={
-        mine ? () => removeOrder.mutate(session.id, { onSuccess: onGoTable }) : undefined
+        mine
+          ? () =>
+              removeOrder.mutate(session.id, {
+                onSuccess: () => {
+                  clearDraft()
+                  onGoTable()
+                },
+              })
+          : undefined
       }
     />
   )

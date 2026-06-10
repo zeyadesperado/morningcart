@@ -30,6 +30,7 @@ export function QtyStepper({
       <Btn delta={-1} sign="–" />
       <span className="tnum w-7 text-center text-lg font-bold text-ink" aria-live="polite">
         {value}
+        <span className="sr-only"> {label}</span>
       </span>
       <Btn delta={1} sign="+" />
     </div>

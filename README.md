@@ -246,6 +246,22 @@ export COOKIE_SECRET="$(openssl rand -hex 32)"
 npm install && npm run build:shared && npm run dev:web   # → http://localhost:5173
 ```
 
+## Share it with the team
+
+The right link to drop in the group chat is the **Docker stack behind HTTPS** — never the
+Vite dev server:
+
+```bash
+COOKIE_SECRET=$(openssl rand -hex 32) docker compose up --build -d   # web on :8080
+cloudflared tunnel --url http://localhost:8080                       # or Caddy/any HTTPS host
+```
+
+Set `COOKIE_SECURE=true` in the api environment once you're behind HTTPS. The app is
+installable — *Add to Home Screen* gives everyone a proper app icon. Anyone with the link
+can join (`noindex` keeps it out of search engines; the URL is the only access control,
+so treat it like a group-chat invite). After deploying, point the `og:image` URL in
+`web/index.html` at your real host so the WhatsApp link preview shows the icon.
+
 ## Testing & verification
 
 ```bash

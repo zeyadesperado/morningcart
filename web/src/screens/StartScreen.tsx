@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import type { Restaurant } from '../types'
 import { money } from '../lib/money'
-import { AppHeader, Screen } from '../components/Shell'
+import { AppHeader, Mark, Screen } from '../components/Shell'
 import { Button } from '../components/Button'
 import { EmptyState } from '../components/States'
 import { Label } from '../components/ui'
@@ -44,7 +44,10 @@ export function StartScreen({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
         >
-          <Label>Good morning, {you}</Label>
+          <Mark className="mb-4 h-12 w-12" animated />
+          <Label>
+            Good morning, <span className="normal-case tracking-normal">{you}</span>
+          </Label>
           <h1 className="mt-2 font-display text-[2.6rem] font-semibold leading-[1.05] tracking-tight text-ink text-balance">
             No breakfast<br />going yet.
           </h1>

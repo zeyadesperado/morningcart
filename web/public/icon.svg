@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- MorningCart — sunrise over the counter -->
+  <rect width="64" height="64" rx="14" fill="#F4ECDB"/>
+  <rect width="64" height="64" rx="14" fill="url(#wash)"/>
+  <defs>
+    <radialGradient id="wash" cx="0.85" cy="0.05" r="1.1">
+      <stop offset="0" stop-color="#E7C77E" stop-opacity="0.45"/>
+      <stop offset="0.55" stop-color="#E7C77E" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g transform="translate(32 30)">
+    <g stroke="#C68A2E" stroke-width="4.4" stroke-linecap="round" opacity="0.9">
+      <line x1="0" y1="0" x2="0" y2="-24" transform="rotate(0)"/>
+      <line x1="0" y1="0" x2="0" y2="-24" transform="rotate(45)"/>
+      <line x1="0" y1="0" x2="0" y2="-24" transform="rotate(90)"/>
+      <line x1="0" y1="0" x2="0" y2="-24" transform="rotate(135)"/>
+      <line x1="0" y1="0" x2="0" y2="-24" transform="rotate(180)"/>
+      <line x1="0" y1="0" x2="0" y2="-24" transform="rotate(225)"/>
+      <line x1="0" y1="0" x2="0" y2="-24" transform="rotate(270)"/>
+      <line x1="0" y1="0" x2="0" y2="-24" transform="rotate(315)"/>
+    </g>
+    <circle r="15" fill="#C0552B"/>
+  </g>
+  <rect x="14" y="48" width="36" height="5" rx="2.5" fill="#2A2018"/>
+</svg>
