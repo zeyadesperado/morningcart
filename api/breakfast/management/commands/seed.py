@@ -16,10 +16,16 @@ def service_date(offset_days: int = 0) -> str:
 
 
 class Command(BaseCommand):
-    help = 'Reset and seed the database with demo restaurants and sessions.'
+    help = 'Seed the database with demo restaurants and sessions. Skips silently if data exists (use --force to wipe and reseed).'
+
+    def add_arguments(self, parser):
+        parser.add_argument('--force', action='store_true', help='Wipe everything and reseed even if data exists.')
 
     @transaction.atomic
     def handle(self, *args, **options):
+        if Restaurant.objects.exists() and not options['force']:
+            self.stdout.write('Data already present — skipping seed (run with --force to wipe and reseed).')
+            return
         # idempotent reset, FK-safe order
         OrderLine.objects.all().delete()
         Order.objects.all().delete()
@@ -38,10 +44,13 @@ class Command(BaseCommand):
                 if r['id'] == 'el-sobhy':
                     el_sobhy_price[short] = price
 
+        el_sobhy_fee = next(r['delivery_fee'] for r in RESTAURANTS if r['id'] == 'el-sobhy')
+
         def make_session(orders, status, sd, started_by):
             s = Session.objects.create(
                 restaurant_id='el-sobhy', started_by=started_by, status=status,
-                service_date=sd, closed_at=(timezone.now() if status == 'closed' else None),
+                service_date=sd, delivery_fee=el_sobhy_fee,
+                closed_at=(timezone.now() if status == 'closed' else None),
             )
             for person, paid, lines in orders:
                 o = Order.objects.create(session=s, person=person, paid=paid)

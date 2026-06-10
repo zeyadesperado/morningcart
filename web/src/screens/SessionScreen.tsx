@@ -15,6 +15,8 @@ export function SessionScreen({
   you,
   variant,
   onClose,
+  onCancelSession,
+  onStartAnother,
   onRetry,
   onOrder,
   onSeeResult,
@@ -24,6 +26,10 @@ export function SessionScreen({
   you: string
   variant: SessionVariant
   onClose: () => void
+  /** present only while the table is empty — abandon a session nobody joined */
+  onCancelSession?: () => void
+  /** closed variant only — kick off a second round the same morning */
+  onStartAnother?: () => void
   onRetry: () => void
   onOrder: () => void
   onSeeResult: () => void
@@ -89,23 +95,41 @@ export function SessionScreen({
 
       {/* Close & aggregate — anyone can press it. The one button. */}
       {!closed ? (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-4 rounded-xl bg-clay-wash p-3 ring-1 ring-clay/20"
-        >
-          <Button full onClick={onClose} className="!py-3.5 text-base">
-            Close &amp; aggregate →
-          </Button>
-          <p className="mt-2 text-center font-sans text-xs text-clay-deep">
-            Anyone can close when most people are in — no owner, no waiting.
-          </p>
-        </motion.div>
+        orders.length > 0 ? (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4 rounded-xl bg-clay-wash p-3 ring-1 ring-clay/20"
+          >
+            <Button full onClick={onClose} className="!py-3.5 text-base">
+              Close &amp; aggregate →
+            </Button>
+            <p className="mt-2 text-center font-sans text-xs text-clay-deep">
+              Anyone can close when most people are in — no owner, no waiting.
+            </p>
+          </motion.div>
+        ) : (
+          onCancelSession && (
+            <div className="mb-4">
+              <Button full variant="ghost" onClick={onCancelSession}>
+                Nobody’s eating? Cancel this session
+              </Button>
+            </div>
+          )
+        )
       ) : (
-        <div className="mb-4">
+        <div className="mb-4 space-y-2">
           <Button full variant="ghost" onClick={onSeeResult}>
             See the order &amp; who owes what →
           </Button>
+          {onStartAnother && (
+            <button
+              onClick={onStartAnother}
+              className="tap w-full py-2 text-center font-sans text-sm font-semibold text-ink-soft"
+            >
+              Closed too soon? ☀ Start another breakfast
+            </button>
+          )}
         </div>
       )}
 

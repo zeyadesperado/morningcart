@@ -26,8 +26,10 @@ services:
       # No baked-in secret: set COOKIE_SECRET in the environment (e.g. `openssl rand -hex 32`).
       # Compose fails loudly if it is unset, so a forgeable default can never ship.
       COOKIE_SECRET: ${COOKIE_SECRET:?set COOKIE_SECRET (openssl rand -hex 32)}
-      WEB_ORIGIN: http://localhost:8080
+      DEBUG: "false"
       PORT: "4000"
+      # Safe on every restart: seed is a no-op when data already exists
+      # (wipe + reseed explicitly with: docker compose exec api python manage.py seed --force)
       SEED_ON_BOOT: "true"
     depends_on:
       db:

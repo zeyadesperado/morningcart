@@ -1,22 +1,28 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { MotionConfig } from 'framer-motion'
-import type { CloseResult, Order, Restaurant } from './types'
+import type { CloseResult, Restaurant } from './types'
 import type { LineDraft } from './components/MenuItemRow'
-import type { OrderDTO, OrderLineInput, ResultDTO, RestaurantDTO, SessionDTO } from './api/client'
+import type { OrderLineInput, RestaurantDTO, ResultDTO, SessionDTO } from './api/client'
 import {
+  keys,
+  useCancelSession,
   useCloseSession,
+  useCurrentSession,
+  useDeleteOrder,
   useLogout,
   useMe,
-  useOpenSession,
   useRestaurantMutations,
   useRestaurants,
+  useSessionResult,
   useStartSession,
   useTogglePaid,
   useUpsertOrder,
 } from './api/hooks'
 import { AppHeader, GrainFilm, Screen } from './components/Shell'
-import { SkeletonList } from './components/States'
+import { ErrorState, SkeletonList } from './components/States'
 import { AppNav } from './components/AppNav'
+import { ErrorToast } from './components/Toast'
 import { ComposeScreen } from './screens/ComposeScreen'
 import { SessionScreen } from './screens/SessionScreen'
 import { ResultScreen } from './screens/ResultScreen'
@@ -39,17 +45,19 @@ const toRestaurant = (d: RestaurantDTO): Restaurant => ({
     available: m.available,
   })),
 })
-const toOrder = (o: OrderDTO): Order => ({
-  id: o.id,
-  person: o.person,
-  paid: o.paid,
-  lines: o.lines.map((l) => ({
-    itemId: l.menuItemId,
-    qty: l.qty,
-    note: l.note ?? undefined,
-    forName: l.forName ?? undefined,
-  })),
-})
+const toOrders = (s: SessionDTO) =>
+  s.orders.map((o) => ({
+    id: o.id,
+    person: o.person,
+    paid: o.paid,
+    lines: o.lines.map((l) => ({
+      itemId: l.menuItemId,
+      qty: l.qty,
+      note: l.note ?? undefined,
+      forName: l.forName ?? undefined,
+      unitPrice: l.unitPrice,
+    })),
+  }))
 const ZERO_RESULT: CloseResult = {
   aggregate: [],
   itemsGrandTotal: 0,
@@ -78,6 +86,7 @@ export default function App() {
       <div className="min-h-[100dvh] w-full">
         <GrainFilm />
         {me.isLoading ? <Splash /> : !user ? <LoginScreen /> : <Authed you={user} />}
+        <ErrorToast />
       </div>
     </MotionConfig>
   )
@@ -87,21 +96,20 @@ type View = 'home' | 'compose' | 'session' | 'result' | 'setup'
 
 function Authed({ you }: { you: string }) {
   const restaurantsQ = useRestaurants()
-  const openQ = useOpenSession()
+  const currentQ = useCurrentSession()
   const start = useStartSession()
   const close = useCloseSession()
-  const togglePaid = useTogglePaid()
+  const cancelSession = useCancelSession()
   const logout = useLogout()
   const rmut = useRestaurantMutations()
 
   const restaurants = restaurantsQ.data?.restaurants ?? []
-  const openSession: SessionDTO | undefined = openQ.data ?? undefined
-  const fullDto = (id: string) => restaurants.find((r) => r.id === id)
+  const session: SessionDTO | undefined = currentQ.data ?? undefined
 
   const [view, setView] = useState<View>('home')
   const [setupId, setSetupId] = useState<string | null>(null)
-  const [closed, setClosed] = useState<{ res: ResultDTO; orders: OrderDTO[] } | null>(null)
-  const [closingId, setClosingId] = useState<string | null>(null)
+  // closed-table escape hatch: show StartScreen again for a second round today
+  const [startAnother, setStartAnother] = useState(false)
 
   const nav = (
     <AppNav you={you} onHome={() => setView('home')} onSetup={() => setView('setup')} onLogout={() => logout.mutate()} />
@@ -122,117 +130,95 @@ function Authed({ you }: { you: string }) {
           onAddItem={(id) => rmut.addItem.mutate({ id, data: { name: 'New item', price: 0, kind: 'plate' } })}
           onPatchItem={(id, itemId, data) => rmut.patchItem.mutate({ id, itemId, data })}
           onRemoveItem={(id, itemId) => rmut.deleteItem.mutate({ id, itemId })}
+          onDeleteRestaurant={(id) => {
+            const r = restaurants.find((x) => x.id === id)
+            if (!window.confirm(`Delete “${r?.name ?? 'this restaurant'}”? The team won't be able to order from it anymore.`)) return
+            rmut.patch.mutate({ id, data: { active: false } })
+            setSetupId(null)
+          }}
         />
         {nav}
       </>
     )
   }
 
-  // ── RESULT ─────────────────────────────────────────────────────────────────
-  if (view === 'result') {
-    const restDto = closed ? fullDto(closed.res.restaurant.id) : undefined
-    const restaurant: Restaurant = restDto
-      ? toRestaurant(restDto)
-      : { id: '', name: closed?.res.restaurant.name ?? '', deliveryFee: 0, menu: [] }
-
-    if (close.isError && !closed) {
-      return (
-        <>
-          <ResultScreen
-            result={ZERO_RESULT}
-            restaurant={restaurant}
-            variant="error"
-            onTogglePaid={() => {}}
-            onRetry={() => closingId && close.mutate(closingId, { onSuccess: (res) => setClosed({ res, orders: [] }) })}
-          />
-          {nav}
-        </>
-      )
-    }
-    if (!closed || close.isPending) {
-      return (
-        <>
-          <ResultScreen result={ZERO_RESULT} restaurant={restaurant} variant="loading" onTogglePaid={() => {}} onRetry={() => {}} />
-          {nav}
-        </>
-      )
-    }
-    const onTogglePaid = (person: string) => {
-      const order = closed.orders.find((o) => o.person === person)
-      if (!order) return
-      const nextPaid = !order.paid
-      setClosed((prev) =>
-        prev
-          ? {
-              res: {
-                ...prev.res,
-                result: {
-                  ...prev.res.result,
-                  perPerson: prev.res.result.perPerson.map((p) => (p.person === person ? { ...p, paid: nextPaid } : p)),
-                },
-              },
-              orders: prev.orders.map((o) => (o.person === person ? { ...o, paid: nextPaid } : o)),
-            }
-          : prev,
-      )
-      togglePaid.mutate(
-        { orderId: order.id, paid: nextPaid },
-        {
-          onError: () =>
-            setClosed((prev) =>
-              prev
-                ? {
-                    res: {
-                      ...prev.res,
-                      result: {
-                        ...prev.res.result,
-                        perPerson: prev.res.result.perPerson.map((p) =>
-                          p.person === person ? { ...p, paid: !nextPaid } : p,
-                        ),
-                      },
-                    },
-                    orders: prev.orders.map((o) => (o.person === person ? { ...o, paid: !nextPaid } : o)),
-                  }
-                : prev,
-            ),
-        },
-      )
-    }
+  // ── network trouble (a real error, not just "no session yet") ──────────────
+  if (currentQ.isError) {
     return (
       <>
-        <ResultScreen result={closed.res.result} restaurant={restaurant} variant="default" onTogglePaid={onTogglePaid} onRetry={() => {}} />
+        <Screen scrollKey="home-error">
+          <AppHeader />
+          <ErrorState what="load this morning’s table" onRetry={() => currentQ.refetch()} />
+        </Screen>
         {nav}
       </>
     )
   }
 
-  // ── NO OPEN SESSION -> START ─────────────────────────────────────────────────
-  if (!openSession) {
-    if (openQ.isLoading || restaurantsQ.isLoading) return <Splash />
+  // ── NO SESSION TODAY (or starting a second round) -> START ─────────────────
+  if (!session || (session.status === 'closed' && startAnother)) {
+    if (currentQ.isLoading || restaurantsQ.isLoading) return <Splash />
     return (
       <>
         <StartScreen
           restaurants={restaurants.map(toRestaurant)}
           you={you}
-          onStart={(rid) => start.mutate(rid, { onSuccess: () => setView('session') })}
+          onStart={(rid) =>
+            start.mutate(rid, {
+              onSuccess: () => {
+                setStartAnother(false)
+                setView('session')
+              },
+            })
+          }
+          onGoSetup={() => setView('setup')}
         />
         {nav}
       </>
     )
   }
 
-  // ── OPEN SESSION present ─────────────────────────────────────────────────────
-  const restDto = fullDto(openSession.restaurantId)
-  if (!restDto) return <Splash />
-  const restaurant = toRestaurant(restDto)
-  const iHaveOrdered = openSession.orders.some((o) => o.person === you)
+  const restaurant = toRestaurant(session.restaurant) // session carries its own menu — never depends on the active-only list
+  const closed = session.status === 'closed'
+
+  // ── RESULT (reachable by EVERYONE, open-or-closed, survives refresh) ───────
+  if (view === 'result') {
+    return (
+      <>
+        <ResultView session={session} restaurant={restaurant} />
+        {nav}
+      </>
+    )
+  }
+
+  // ── CLOSED -> the table shows the outcome, result one tap away ─────────────
+  if (closed) {
+    return (
+      <>
+        <SessionScreen
+          restaurant={restaurant}
+          orders={toOrders(session)}
+          you={you}
+          variant="closed"
+          onClose={() => {}}
+          onStartAnother={() => setStartAnother(true)}
+          onRetry={() => currentQ.refetch()}
+          onOrder={() => {}}
+          onSeeResult={() => setView('result')}
+        />
+        {nav}
+      </>
+    )
+  }
+
+  const iHaveOrdered = session.orders.some((o) => o.person === you)
 
   // a newly-arrived user with no order goes straight to composing
   if (view === 'compose' || (view === 'home' && !iHaveOrdered)) {
     return (
       <>
         <ComposeView
-          session={openSession}
+          session={session}
           restaurant={restaurant}
           you={you}
           onSubmitted={() => setView('session')}
@@ -244,26 +230,77 @@ function Authed({ you }: { you: string }) {
     )
   }
 
-  // default: the table (covers 'home' + 'session')
+  // default: the open table (covers 'home' + 'session')
   return (
     <>
       <SessionScreen
         restaurant={restaurant}
-        orders={openSession.orders.map(toOrder)}
+        orders={toOrders(session)}
         you={you}
         variant="default"
         onClose={() => {
-          setClosingId(openSession.id)
           setView('result')
-          close.mutate(openSession.id, { onSuccess: (res) => setClosed({ res, orders: openSession.orders }) })
+          close.mutate(session.id)
         }}
-        onRetry={() => openQ.refetch()}
+        onCancelSession={
+          session.orders.length === 0
+            ? () => cancelSession.mutate(session.id, { onSuccess: () => setView('home') })
+            : undefined
+        }
+        onRetry={() => currentQ.refetch()}
         onOrder={() => setView('compose')}
         onSeeResult={() => setView('result')}
       />
       {nav}
     </>
   )
+}
+
+// ── Result wrapper: server-computed settlement + optimistic paid toggles ─────
+function ResultView({ session, restaurant }: { session: SessionDTO; restaurant: Restaurant }) {
+  const qc = useQueryClient()
+  const resultQ = useSessionResult(session.id)
+  const togglePaid = useTogglePaid()
+
+  if (resultQ.isError) {
+    return (
+      <ResultScreen
+        result={ZERO_RESULT}
+        restaurant={restaurant}
+        variant="error"
+        onTogglePaid={() => {}}
+        onRetry={() => resultQ.refetch()}
+      />
+    )
+  }
+  const res = resultQ.data
+  if (!res) {
+    return <ResultScreen result={ZERO_RESULT} restaurant={restaurant} variant="loading" onTogglePaid={() => {}} onRetry={() => {}} />
+  }
+
+  const onTogglePaid = (person: string) => {
+    const order = session.orders.find((o) => o.person === person)
+    const entry = res.result.perPerson.find((p) => p.person === person)
+    if (!order || !entry) return
+    const nextPaid = !entry.paid
+    qc.setQueryData<ResultDTO>(keys.result(session.id), (prev) =>
+      prev
+        ? {
+            ...prev,
+            result: {
+              ...prev.result,
+              perPerson: prev.result.perPerson.map((p) => (p.person === person ? { ...p, paid: nextPaid } : p)),
+            },
+          }
+        : prev,
+    )
+    togglePaid.mutate(
+      { orderId: order.id, paid: nextPaid },
+      { onError: () => qc.invalidateQueries({ queryKey: keys.result(session.id) }) }, // roll back to server truth
+    )
+  }
+
+  return <ResultScreen result={res.result} restaurant={restaurant} variant="default" onTogglePaid={onTogglePaid} onRetry={() => {}} />
 }
 
 // ── Compose wrapper: owns the draft (seeded from my existing order) + mutation ─
@@ -283,6 +320,8 @@ function ComposeView({
   onGoSetup: () => void
 }) {
   const upsert = useUpsertOrder()
+  const removeOrder = useDeleteOrder()
+  const rmut = useRestaurantMutations()
   const mine = session.orders.find((o) => o.person === you)
   const [draft, setDraft] = useState<Record<string, LineDraft>>(() =>
     mine
@@ -301,6 +340,9 @@ function ComposeView({
     upsert.mutate({ sessionId: session.id, lines }, { onSuccess: onSubmitted })
   }
 
+  // quick-added items land at the end of the menu, not on top of it
+  const nextSortOrder = session.restaurant.menu.reduce((mx, m) => Math.max(mx, m.sortOrder), -1) + 1
+
   const variant = restaurant.menu.length === 0 ? 'empty' : upsert.isError ? 'submit-error' : 'default'
 
   return (
@@ -315,6 +357,10 @@ function ComposeView({
       onEdit={() => {}}
       onGoTable={onGoTable}
       onGoSetup={onGoSetup}
+      onAddMenuItem={(d) => rmut.addItem.mutateAsync({ id: restaurant.id, data: { ...d, sortOrder: nextSortOrder } })}
+      onRemoveOrder={
+        mine ? () => removeOrder.mutate(session.id, { onSuccess: onGoTable }) : undefined
+      }
     />
   )
 }

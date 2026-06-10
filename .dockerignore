@@ -1,0 +1,11 @@
+# Build context for web/Dockerfile is the repo root — keep it lean.
+.git
+.github
+node_modules
+**/node_modules
+**/dist
+api/
+web/.shots
+web/.e2e-shots
+*.log
+.env

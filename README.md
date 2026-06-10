@@ -163,7 +163,7 @@ Money fields are integer piasters.
 |---|---|---|
 | **Restaurant** | `name, arabic, delivery_fee, active` | has many MenuItem / Session |
 | **MenuItem** | `restaurant, name, arabic, price, kind, available, sort_order` | `kind` ∈ plate/drink/extra (display only) |
-| **Session** | `restaurant, started_by, status, service_date, closed_at` | partial unique: one **open** per restaurant per day |
+| **Session** | `restaurant, started_by, status, service_date, delivery_fee, closed_at` | partial unique: one **open** per restaurant per day; `delivery_fee` **snapshotted at start** so later restaurant edits never rewrite a settlement |
 | **Order** | `session, person, paid` | **unique (session, person)** → upsert |
 | **OrderLine** | `order, menu_item, qty, note, for_name, unit_price` | `unit_price` snapshotted at add time |
 
@@ -183,24 +183,34 @@ errors return `{ "error": "..." }`. Interactive docs at `/api/docs`.
 | `GET` | `/restaurants` | restaurants + menus |
 | `POST`/`PATCH` | `/restaurants[/{id}]` | create / edit restaurant (setup) |
 | `POST`/`PATCH`/`DELETE` | `/restaurants/{id}/items[/{itemId}]` | menu items (setup) |
-| `GET` | `/sessions/open?restaurantId=` | the current open session (404 if none) |
-| `POST` | `/sessions` | start breakfast (one-open-per-day guard) |
-| `GET` | `/sessions/{id}` | roster + all orders (poll target) |
-| `PUT`/`DELETE` | `/sessions/{id}/order` | upsert / cancel my order |
-| `POST` | `/sessions/{id}/close` | close & aggregate (any user, idempotent) |
-| `GET` | `/sessions/{id}/result` | aggregate + per-person totals |
+| `GET` | `/sessions/open?restaurantId=` | today's open session (404 if none) |
+| `GET` | `/sessions/current` | today's session, **open or closed** — keeps the settlement reachable for everyone (poll target) |
+| `POST` | `/sessions` | start breakfast (one session per morning; joins the existing one if already started) |
+| `GET` | `/sessions/{id}` | roster + all orders |
+| `PUT`/`DELETE` | `/sessions/{id}/order` | upsert / cancel my order (locked rows — concurrent edits can't duplicate or race a close) |
+| `DELETE` | `/sessions/{id}` | cancel an **empty** open session (wrong restaurant, nobody's eating) |
+| `POST` | `/sessions/{id}/close` | close & aggregate (any user, idempotent; refuses an empty table) |
+| `GET` | `/sessions/{id}/result` | aggregate + per-person totals (uses the session's **fee snapshot**) |
 | `PATCH` | `/orders/{id}` | toggle `paid` |
 
 ## Identity & security
 
-- **Pick-your-name** signed cookie (`django.core.signing`, `HttpOnly`, `SameSite=Strict`).
-  Names are **whitelisted** against the colleague list server-side — no impersonation.
+- **Open login**: type any name, get a **signed cookie** (`django.core.signing`,
+  `HttpOnly`, `SameSite=Strict`; set `COOKIE_SECURE=true` behind HTTPS). Whitespace is
+  normalized and Arabic names work end-to-end. If `COLLEAGUES` in `breakfast/data.py` is
+  non-empty, names are whitelisted against it instead.
+- **Trust model**: this is internal tooling for colleagues who trust each other. Anyone
+  can edit menus, close the session, or tick the paid checklist (whoever fronts the cash
+  marks people paid) — *deliberately* not permissioned. Don't expose it to the internet.
 - A thin `current_user` / `set_user` **seam** in `breakfast/auth.py` — swap for OIDC/SSO
   without touching any route.
 - Order/session reads and all mutations require the cookie; `/restaurants` and `/colleagues`
   stay public for the login screen.
-- `COOKIE_SECRET` has **no baked-in default** in Docker — compose fails loudly if unset.
-- The Django ORM is fully parameterized — no raw SQL, no injection surface.
+- `COOKIE_SECRET` is **required when `DEBUG=false`** — the API refuses to boot without it
+  (no silent insecure fallback), and Docker compose additionally fails loudly if unset.
+- The Django ORM is fully parameterized — no raw SQL, no injection surface. Invalid input
+  (over-length names, unknown item kinds, out-of-range quantities) returns a JSON `422`,
+  never an HTML 500.
 
 ## Getting started (Docker)
 
@@ -210,19 +220,23 @@ COOKIE_SECRET=$(openssl rand -hex 32) docker compose up --build
 # → web at http://localhost:8080   (api is internal, reverse-proxied at /api)
 ```
 
-`db` is Postgres; `api` runs migrations and seeds demo data on boot (`SEED_ON_BOOT=true`);
-`web` is nginx serving the built SPA and proxying `/api/`.
+`db` is Postgres; `api` runs migrations and seeds demo data on first boot
+(`SEED_ON_BOOT=true` — the seed is a **no-op when data exists**, so restarts never wipe
+your real orders; wipe explicitly with `docker compose exec api python manage.py seed --force`);
+`web` is nginx serving the built SPA and proxying `/api/`. All env vars are documented
+in [`.env.example`](.env.example).
 
 ## Local development
 
-Needs a local Postgres. **Backend** (from `api/`):
+Prerequisites: Python ≥ 3.11, Node ≥ 20, PostgreSQL ≥ 14. **Backend** (from `api/`):
 
 ```bash
+createdb morningcart                                            # once
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
 export DATABASE_URL="postgresql://user@localhost/morningcart"   # your DB
 export COOKIE_SECRET="$(openssl rand -hex 32)"
 .venv/bin/python manage.py migrate
-.venv/bin/python manage.py seed
+.venv/bin/python manage.py seed        # demo data; no-op if data exists (--force to reset)
 .venv/bin/python manage.py runserver 4000
 ```
 
@@ -238,13 +252,16 @@ npm install && npm run build:shared && npm run dev:web   # → http://localhost:
 # server money invariant — hypothesis property tests, no DB needed
 cd api && .venv/bin/python -m unittest breakfast.tests.test_domain -v
 
-# web money invariant (fast-check) + full typecheck
+# API endpoint tests — auth, validation, session lifecycle, fee snapshots (needs Postgres)
+cd api && .venv/bin/python manage.py test breakfast.tests.test_api
+
+# web money invariant (fast-check, incl. price-snapshot parity) + full typecheck
 npm run test:shared && npm run typecheck
 ```
 
-The backend has been verified end-to-end against a real Postgres: full ordering flow plus
-every guard (whitelisted login, auth-gated reads, empty-session close rejection,
-one-open-session-per-day, upsert-replace) — with the close invariant holding on live data.
+All of the above runs on every push via **GitHub Actions** ([.github/workflows/ci.yml](.github/workflows/ci.yml)):
+an `api` job (property + endpoint tests against a Postgres service) and a `web` job
+(typecheck, fast-check, production build).
 
 ## Design decisions & non-goals
 
@@ -266,4 +283,4 @@ period balances for batch settlers, SSO, and multi-office.
 
 ## License
 
-No license yet — add one (e.g. MIT) before reuse.
+[MIT](LICENSE).

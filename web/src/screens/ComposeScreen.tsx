@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import type { MenuItem, Restaurant } from '../types'
+import type { ItemKind, MenuItem, Restaurant } from '../types'
+import { egp } from '../lib/money'
 import type { LineDraft } from '../components/MenuItemRow'
 import { MenuItemRow } from '../components/MenuItemRow'
 import { RunningSubtotal } from '../components/RunningSubtotal'
@@ -24,6 +26,8 @@ export function ComposeScreen({
   onEdit,
   onGoTable,
   onGoSetup,
+  onAddMenuItem,
+  onRemoveOrder,
 }: {
   restaurant: Restaurant
   you: string
@@ -35,6 +39,9 @@ export function ComposeScreen({
   onEdit: () => void
   onGoTable: () => void
   onGoSetup: () => void
+  onAddMenuItem: (data: { name: string; price: number; kind: ItemKind }) => Promise<unknown>
+  /** present when I already have a submitted order — cancelling frees my delivery share */
+  onRemoveOrder?: () => void
 }) {
   const lineFor = (id: string): LineDraft => draft[id] ?? { qty: 0 }
   const subtotal = restaurant.menu.reduce((s, m) => s + lineFor(m.id).qty * m.price, 0)
@@ -166,7 +173,8 @@ export function ComposeScreen({
       {variant === 'submit-error' && <RetryBanner onRetry={onRetry} />}
       <div className="space-y-4 pb-2">
         {KIND_ORDER.map((kind) => {
-          const items: MenuItem[] = restaurant.menu.filter((m) => m.kind === kind)
+          // unavailable items are hidden — the API rejects them anyway
+          const items: MenuItem[] = restaurant.menu.filter((m) => m.kind === kind && m.available !== false)
           if (!items.length) return null
           return (
             <section key={kind}>
@@ -183,6 +191,8 @@ export function ComposeScreen({
         })}
       </div>
 
+      <AddMenuItemForm onAdd={onAddMenuItem} />
+
       <AnimatePresence>
         {itemCount > 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -197,10 +207,108 @@ export function ComposeScreen({
       </AnimatePresence>
 
       {itemCount === 0 && (
-        <p className="mt-auto pb-6 pt-8 text-center font-sans text-sm text-ink-faint">
-          Tap <span className="font-semibold text-clay-deep">Add</span> on anything to start your order
-        </p>
+        <div className="mt-auto space-y-3 pb-6 pt-8 text-center">
+          <p className="font-sans text-sm text-ink-faint">
+            Tap <span className="font-semibold text-clay-deep">Add</span> on anything to start your order
+          </p>
+          {onRemoveOrder && (
+            <button
+              onClick={onRemoveOrder}
+              className="tap w-full rounded-lg py-2.5 font-sans text-sm font-bold text-clay-deep ring-1 ring-clay/30 hover:bg-clay-wash"
+            >
+              Remove my order — frees my delivery share
+            </button>
+          )}
+          <button onClick={onGoTable} className="tap w-full py-2 font-sans text-sm font-semibold text-ink-soft">
+            Just looking? See the table →
+          </button>
+        </div>
       )}
     </Screen>
+  )
+}
+
+function AddMenuItemForm({ onAdd }: { onAdd: (d: { name: string; price: number; kind: ItemKind }) => Promise<unknown> }) {
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [name, setName] = useState('')
+  const [price, setPrice] = useState('')
+  const [kind, setKind] = useState<ItemKind>('plate')
+  const submit = async () => {
+    const n = name.trim()
+    const p = parseFloat(price)
+    if (!n || !(p >= 0) || busy) return
+    setBusy(true)
+    try {
+      await onAdd({ name: n, price: egp(p), kind })
+      // only reset on success — a failed add keeps the form (the toast explains)
+      setName('')
+      setPrice('')
+      setKind('plate')
+      setOpen(false)
+    } catch {
+      /* error surfaced by the global mutation toast */
+    } finally {
+      setBusy(false)
+    }
+  }
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="mb-2 w-full rounded-lg border border-dashed border-line-strong py-2.5 font-sans text-sm font-semibold text-ink-soft transition-colors hover:border-clay hover:text-clay-deep"
+      >
+        ＋ Add an item to the menu
+      </button>
+    )
+  }
+  return (
+    <div className="mb-2 rounded-lg bg-card-raised p-2.5 ring-1 ring-line">
+      <div className="flex gap-2">
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && submit()}
+          placeholder="Item name"
+          className="min-w-0 flex-1 rounded-md bg-paper px-2.5 py-2 font-sans text-sm font-semibold text-ink ring-1 ring-line-strong focus:ring-clay"
+        />
+        <input
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && submit()}
+          type="number"
+          min={0}
+          step={0.5}
+          placeholder="EGP"
+          aria-label="Price in EGP"
+          className="tnum w-20 rounded-md bg-paper px-2 py-2 text-right font-sans text-sm font-bold text-ink ring-1 ring-line-strong focus:ring-clay"
+        />
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        {(['plate', 'drink', 'extra'] as ItemKind[]).map((k) => (
+          <button
+            key={k}
+            onClick={() => setKind(k)}
+            className={`rounded-full px-2.5 py-1 font-sans text-xs font-semibold capitalize ${
+              kind === k ? 'bg-ink text-card-raised' : 'bg-card text-ink-soft ring-1 ring-line-strong'
+            }`}
+          >
+            {k}
+          </button>
+        ))}
+        <div className="flex-1" />
+        <button onClick={() => setOpen(false)} className="px-2 py-1 font-sans text-xs font-semibold text-ink-faint">
+          Cancel
+        </button>
+        <button
+          onClick={submit}
+          disabled={busy}
+          className="tap rounded-md bg-clay px-3 py-1.5 font-sans text-xs font-bold text-card-raised disabled:opacity-50"
+        >
+          {busy ? 'Adding…' : 'Add'}
+        </button>
+      </div>
+    </div>
   )
 }

@@ -54,6 +54,27 @@ describe('closeSession — per-person totals reconcile exactly', () => {
   })
 })
 
+describe('unit-price snapshots — later menu edits cannot reprice an order', () => {
+  it('bills the snapshot, not the live menu price (server parity)', () => {
+    const r = restaurantById(CLOSED_SESSION.restaurantId)
+    const snapshotted = {
+      ...CLOSED_SESSION,
+      orders: CLOSED_SESSION.orders.map((o) => ({
+        ...o,
+        lines: o.lines.map((l) => ({
+          ...l,
+          unitPrice: r.menu.find((m) => m.id === l.itemId)!.price,
+        })),
+      })),
+    }
+    // double every live price AFTER the snapshots were taken
+    const repriced = { ...r, menu: r.menu.map((m) => ({ ...m, price: m.price * 2 })) }
+    const res = closeSession(snapshotted, repriced)
+    expect(res.itemsGrandTotal).toBe(18_300) // unchanged — snapshots win
+    expect(verifyExact(res)).toBe(true)
+  })
+})
+
 describe('order-on-behalf — items count, delivery heads do not', () => {
   const r = restaurantById(CLOSED_SESSION.restaurantId)
   const res = closeSession(CLOSED_SESSION, r)

@@ -81,7 +81,10 @@ export interface SessionDTO {
   serviceDate: string
   createdAt: string
   closedAt: string | null
-  restaurant: { id: string; name: string; arabic: string | null; deliveryFee: number }
+  /** full restaurant incl. menu — sessions stay renderable even if the
+   *  restaurant is later soft-deleted out of the /restaurants list.
+   *  deliveryFee here is the session's snapshot, not the live fee. */
+  restaurant: RestaurantDTO
   orders: OrderDTO[]
 }
 export interface ResultDTO {
@@ -112,13 +115,16 @@ export const api = {
     req<{ restaurant: RestaurantDTO }>(`/restaurants/${id}`, { method: 'PATCH', body: body(data) }),
   addItem: (id: string, data: { name: string; arabic?: string; price: number; kind?: ItemKind; sortOrder?: number }) =>
     req<{ restaurant: RestaurantDTO }>(`/restaurants/${id}/items`, { method: 'POST', body: body(data) }),
-  patchItem: (id: string, itemId: string, data: Partial<{ name: string; price: number; kind: ItemKind; available: boolean; arabic: string | null }>) =>
+  patchItem: (id: string, itemId: string, data: Partial<{ name: string; price: number; kind: ItemKind; available: boolean; arabic: string | null; sortOrder: number }>) =>
     req<{ restaurant: RestaurantDTO }>(`/restaurants/${id}/items/${itemId}`, { method: 'PATCH', body: body(data) }),
   deleteItem: (id: string, itemId: string) =>
     req<{ restaurant: RestaurantDTO }>(`/restaurants/${id}/items/${itemId}`, { method: 'DELETE' }),
 
   openSession: (restaurantId?: string) =>
     req<{ session: SessionDTO }>(`/sessions/open${restaurantId ? `?restaurantId=${restaurantId}` : ''}`),
+  /** today's session, open OR closed — keeps the settlement reachable for everyone */
+  currentSession: () => req<{ session: SessionDTO }>('/sessions/current'),
+  cancelSession: (sessionId: string) => req<{ ok: true }>(`/sessions/${sessionId}`, { method: 'DELETE' }),
   startSession: (restaurantId: string) =>
     req<{ session: SessionDTO }>('/sessions', { method: 'POST', body: body({ restaurantId }) }),
   session: (id: string) => req<{ session: SessionDTO }>(`/sessions/${id}`),

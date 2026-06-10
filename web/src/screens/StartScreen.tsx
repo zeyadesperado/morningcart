@@ -4,18 +4,36 @@ import type { Restaurant } from '../types'
 import { money } from '../lib/money'
 import { AppHeader, Screen } from '../components/Shell'
 import { Button } from '../components/Button'
+import { EmptyState } from '../components/States'
 import { Label } from '../components/ui'
 
 export function StartScreen({
   restaurants,
   you,
   onStart,
+  onGoSetup,
 }: {
   restaurants: Restaurant[]
   you: string
   onStart: (restaurantId: string) => void
+  onGoSetup: () => void
 }) {
   const [picked, setPicked] = useState(restaurants[0]?.id ?? '')
+
+  // fresh install: there is nothing to start from yet — route to Setup
+  if (restaurants.length === 0) {
+    return (
+      <Screen scrollKey="start-empty">
+        <AppHeader />
+        <EmptyState
+          icon="🌅"
+          title="Set up your first restaurant"
+          body="Add the place you order from — name, delivery fee, and menu. After that, every morning is two taps."
+          action={{ label: 'Open Setup', onClick: onGoSetup }}
+        />
+      </Screen>
+    )
+  }
 
   return (
     <Screen scrollKey="start">
@@ -77,7 +95,7 @@ export function StartScreen({
           </div>
 
           <div className="mt-6">
-            <Button full onClick={() => onStart(picked)} className="!py-4 text-base">
+            <Button full disabled={!picked} onClick={() => picked && onStart(picked)} className="!py-4 text-base">
               ☀ Start breakfast
             </Button>
           </div>

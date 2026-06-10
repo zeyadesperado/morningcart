@@ -1,6 +1,7 @@
 import type {
   AggregateLine,
   CloseResult,
+  OrderLine,
   Piaster,
   Restaurant,
   Session,
@@ -44,9 +45,12 @@ export function rollup(session: Session, restaurant: Restaurant): AggregateLine[
   return [...byItem.values()].sort((a, b) => order.get(a.itemId)! - order.get(b.itemId)!)
 }
 
-const lineItemsTotal = (restaurant: Restaurant, itemId: string, qty: number): Piaster => {
-  const item = restaurant.menu.find((m) => m.id === itemId)
-  return item ? item.price * qty : 0
+// Snapshot price wins (matches the server, which always bills the price at
+// add time); the live menu price is only a fallback for snapshot-less fixtures.
+const lineItemsTotal = (restaurant: Restaurant, line: OrderLine): Piaster => {
+  if (line.unitPrice != null) return line.unitPrice * line.qty
+  const item = restaurant.menu.find((m) => m.id === line.itemId)
+  return item ? item.price * line.qty : 0
 }
 
 /** The full close: aggregate + per-person totals (items + fair delivery share). */
@@ -59,7 +63,7 @@ export function closeSession(session: Session, restaurant: Restaurant): CloseRes
 
   const perPerson = orders.map((order, i) => {
     const itemsTotal = order.lines.reduce(
-      (sum, l) => sum + lineItemsTotal(restaurant, l.itemId, l.qty),
+      (sum, l) => sum + lineItemsTotal(restaurant, l),
       0,
     )
     const deliveryShare = shares[i] ?? 0

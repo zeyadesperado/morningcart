@@ -33,6 +33,9 @@ export interface OrderLine {
   note?: string
   /** order-on-behalf — never adds a delivery head */
   forName?: string
+  /** price snapshot at add time (piasters) — when present it wins over the
+   *  live menu price, matching the server's billing (later edits can't reprice) */
+  unitPrice?: Piaster
 }
 
 export interface Order {

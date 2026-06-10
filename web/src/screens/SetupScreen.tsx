@@ -6,6 +6,15 @@ import { Button } from '../components/Button'
 import { EmptyState, SkeletonList } from '../components/States'
 import { KindDot, Label } from '../components/ui'
 
+/** Parse an EGP input; null = leave the stored value alone (blank/invalid). */
+function parseEgp(raw: string): number | null {
+  const t = raw.trim()
+  if (!t) return null
+  const n = parseFloat(t)
+  if (!isFinite(n) || n < 0) return null
+  return egp(n)
+}
+
 export function SetupScreen({
   restaurants,
   activeId,
@@ -16,16 +25,22 @@ export function SetupScreen({
   onAddItem,
   onPatchItem,
   onRemoveItem,
+  onDeleteRestaurant,
 }: {
   restaurants: RestaurantDTO[]
   activeId: string
   loading: boolean
   onSelect: (id: string) => void
   onAddRestaurant: () => void
-  onPatchRestaurant: (id: string, data: { name?: string; deliveryFee?: number }) => void
+  onPatchRestaurant: (id: string, data: { name?: string; deliveryFee?: number; arabic?: string }) => void
   onAddItem: (id: string) => void
-  onPatchItem: (id: string, itemId: string, data: Partial<{ name: string; price: number; kind: ItemKind }>) => void
+  onPatchItem: (
+    id: string,
+    itemId: string,
+    data: Partial<{ name: string; price: number; kind: ItemKind; available: boolean; arabic: string }>,
+  ) => void
   onRemoveItem: (id: string, itemId: string) => void
+  onDeleteRestaurant: (id: string) => void
 }) {
   if (loading) {
     return (
@@ -96,8 +111,23 @@ export function SetupScreen({
             onBlur={(e) => {
               const v = e.target.value.trim()
               if (v && v !== r.name) onPatchRestaurant(r.id, { name: v })
+              else e.target.value = r.name
             }}
             className="w-full rounded-lg bg-card-raised px-3 py-2.5 font-sans text-base font-semibold text-ink ring-1 ring-line-strong focus:ring-clay"
+          />
+        </Field>
+
+        <Field label="Arabic name · shows on the vendor ticket (optional)">
+          <input
+            key={`${r.id}-arabic`}
+            dir="rtl"
+            defaultValue={r.arabic ?? ''}
+            placeholder="الاسم بالعربي"
+            onBlur={(e) => {
+              const v = e.target.value.trim()
+              if (v !== (r.arabic ?? '')) onPatchRestaurant(r.id, { arabic: v })
+            }}
+            className="w-full rounded-lg bg-card-raised px-3 py-2.5 font-sans text-base font-semibold text-ink ring-1 ring-line-strong placeholder:text-ink-faint focus:ring-clay"
           />
         </Field>
 
@@ -112,7 +142,11 @@ export function SetupScreen({
               step={0.5}
               defaultValue={(r.deliveryFee / 100).toString()}
               onBlur={(e) => {
-                const v = egp(parseFloat(e.target.value) || 0)
+                const v = parseEgp(e.target.value)
+                if (v === null) {
+                  e.target.value = (r.deliveryFee / 100).toString() // blank/invalid ≠ "make it free"
+                  return
+                }
                 if (v !== r.deliveryFee) onPatchRestaurant(r.id, { deliveryFee: v })
               }}
               className="tnum w-24 bg-transparent font-sans text-base font-bold text-ink focus:outline-none"
@@ -135,8 +169,22 @@ export function SetupScreen({
                   onBlur={(e) => {
                     const v = e.target.value.trim()
                     if (v && v !== m.name) onPatchItem(r.id, m.id, { name: v })
+                    else e.target.value = m.name
                   }}
-                  className="min-w-0 flex-1 rounded bg-transparent font-sans text-sm font-semibold text-ink placeholder:text-ink-faint focus:outline-none focus-visible:ring-1"
+                  className={`min-w-0 flex-1 rounded bg-transparent font-sans text-sm font-semibold text-ink placeholder:text-ink-faint focus:outline-none focus-visible:ring-1 ${
+                    m.available ? '' : 'line-through opacity-60'
+                  }`}
+                />
+                <input
+                  dir="rtl"
+                  defaultValue={m.arabic ?? ''}
+                  placeholder="عربي"
+                  aria-label={`Arabic name for ${m.name || 'item'}`}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim()
+                    if (v !== (m.arabic ?? '')) onPatchItem(r.id, m.id, { arabic: v })
+                  }}
+                  className="w-16 rounded bg-transparent text-right font-sans text-sm text-ink-soft placeholder:text-ink-faint focus:outline-none focus-visible:ring-1"
                 />
                 <div className="inline-flex items-center gap-1 rounded-md bg-paper px-2 py-1 ring-1 ring-line">
                   <input
@@ -145,13 +193,27 @@ export function SetupScreen({
                     step={0.5}
                     defaultValue={(m.price / 100).toString()}
                     onBlur={(e) => {
-                      const v = egp(parseFloat(e.target.value) || 0)
+                      const v = parseEgp(e.target.value)
+                      if (v === null) {
+                        e.target.value = (m.price / 100).toString()
+                        return
+                      }
                       if (v !== m.price) onPatchItem(r.id, m.id, { price: v })
                     }}
                     aria-label={`Price for ${m.name || 'item'}`}
                     className="tnum w-14 bg-transparent text-right font-sans text-sm font-bold text-ink focus:outline-none"
                   />
                 </div>
+                <button
+                  onClick={() => onPatchItem(r.id, m.id, { available: !m.available })}
+                  aria-label={m.available ? `Mark ${m.name || 'item'} unavailable` : `Mark ${m.name || 'item'} available`}
+                  title={m.available ? 'Available — tap to hide from ordering' : 'Unavailable — tap to bring back'}
+                  className={`tap grid h-9 w-9 shrink-0 place-items-center rounded-md text-base ${
+                    m.available ? 'text-sage-deep hover:bg-wash' : 'text-ink-faint hover:bg-wash'
+                  }`}
+                >
+                  {m.available ? '◉' : '○'}
+                </button>
                 <button
                   onClick={() => onRemoveItem(r.id, m.id)}
                   aria-label={`Remove ${m.name || 'item'}`}
@@ -167,8 +229,17 @@ export function SetupScreen({
               ＋ Add item
             </Button>
           </div>
+          <p className="mt-2 px-1 font-sans text-xs text-ink-faint">
+            ◉ = orderable this morning. Items that were ever ordered can’t be removed — mark them ○ unavailable instead.
+          </p>
         </div>
       </div>
+      <button
+        onClick={() => onDeleteRestaurant(r.id)}
+        className="mt-6 w-full rounded-lg py-2.5 font-sans text-sm font-bold text-clay-deep ring-1 ring-clay/30 transition-colors hover:bg-clay-wash"
+      >
+        Delete “{r.name}”
+      </button>
       <div className="h-10" />
     </Screen>
   )

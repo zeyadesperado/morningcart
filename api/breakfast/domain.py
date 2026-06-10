@@ -8,7 +8,10 @@ from __future__ import annotations
 
 
 def egp(pounds: float) -> int:
-    return round(pounds * 100)
+    # floor(x + 0.5) = round-half-up, matching JS Math.round in shared/money.ts
+    # (Python's round() is half-to-even: round(12.5) == 12 but Math.round -> 13).
+    import math
+    return math.floor(pounds * 100 + 0.5)
 
 
 def money(p: int) -> str:

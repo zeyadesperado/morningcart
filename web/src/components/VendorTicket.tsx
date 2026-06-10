@@ -8,25 +8,41 @@ import { Label } from './ui'
 const KIND_LABEL: Record<string, string> = { plate: 'Plates', drink: 'Drinks', extra: 'Extras' }
 
 export function VendorTicket({ result, restaurant }: { result: CloseResult; restaurant: Restaurant }) {
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle')
   const kindOf = (id: string) => restaurant.menu.find((m) => m.id === id)?.kind ?? 'plate'
   const order: Array<'plate' | 'drink' | 'extra'> = ['plate', 'drink', 'extra']
 
   const copy = async () => {
     const text = aggregateToText(result, restaurant)
+    let ok = false
     try {
       await navigator.clipboard.writeText(text)
+      ok = true
     } catch {
-      /* clipboard may be blocked in sandbox previews — still flash success */
+      // navigator.clipboard needs a secure context — on plain-HTTP LAN (the
+      // office reality) fall back to the legacy textarea trick
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        ok = document.execCommand('copy')
+        ta.remove()
+      } catch {
+        ok = false
+      }
     }
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1900)
+    setCopied(ok ? 'ok' : 'fail') // never flash success for a failed copy
+    setTimeout(() => setCopied('idle'), 1900)
   }
 
   return (
     <div className="ticket ticket-perf rounded-lg px-5 py-5 shadow-card">
       <span className="sr-only" role="status" aria-live="polite">
-        {copied ? 'Order copied to clipboard' : ''}
+        {copied === 'ok' ? 'Order copied to clipboard' : copied === 'fail' ? 'Copy failed' : ''}
       </span>
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -44,12 +60,14 @@ export function VendorTicket({ result, restaurant }: { result: CloseResult; rest
           whileTap={{ scale: 0.95 }}
           aria-label="Copy the order to send on WhatsApp"
           className={`tap shrink-0 rounded-lg px-3.5 py-2 font-sans text-sm font-bold ring-1 transition-colors ${
-            copied
+            copied === 'ok'
               ? 'bg-sage text-card-raised ring-sage-deep'
-              : 'bg-ink text-card-raised ring-ink hover:bg-ink/90'
+              : copied === 'fail'
+                ? 'bg-clay text-card-raised ring-clay-deep'
+                : 'bg-ink text-card-raised ring-ink hover:bg-ink/90'
           }`}
         >
-          {copied ? '✓ Copied' : 'Copy'}
+          {copied === 'ok' ? '✓ Copied' : copied === 'fail' ? '✗ Couldn’t copy' : 'Copy'}
         </motion.button>
       </div>
 

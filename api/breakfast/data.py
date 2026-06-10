@@ -2,10 +2,7 @@
 SHORT id that repeats across restaurants, so DB ids are namespaced per restaurant."""
 from breakfast.domain import egp
 
-COLLEAGUES = [
-    'Mariam', 'Tarek', 'Karim', 'Salma', 'Ahmed', 'Mohamed', 'Nour', 'Hana',
-    'Omar', 'Youssef', 'Laila', 'Mostafa', 'Dina', 'Khaled', 'Aya',
-]
+COLLEAGUES: list[str] = []  # no predefined users — anyone types their own name to join
 
 # (short_id, name, arabic, kind, price)
 EL_SOBHY_MENU = [

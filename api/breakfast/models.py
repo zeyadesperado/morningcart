@@ -36,6 +36,8 @@ class Session(models.Model):
     started_by = models.CharField(max_length=80)
     status = models.CharField(max_length=16, default='open')  # open | closed
     service_date = models.CharField(max_length=10)  # YYYY-MM-DD, office-local
+    # snapshot at start — editing the restaurant later must not rewrite settlements
+    delivery_fee = models.IntegerField(null=True, blank=True)  # piasters
     created_at = models.DateTimeField(auto_now_add=True)
     closed_at = models.DateTimeField(null=True, blank=True)
 
