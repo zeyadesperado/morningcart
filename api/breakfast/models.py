@@ -8,7 +8,7 @@ def gen_id() -> str:
 
 
 class Restaurant(models.Model):
-    id = models.CharField(primary_key=True, max_length=64, default=gen_id)
+    id = models.CharField(primary_key=True, max_length=64, default=gen_id, editable=False)
     name = models.CharField(max_length=200)
     arabic = models.CharField(max_length=200, null=True, blank=True)
     delivery_fee = models.IntegerField()  # piasters; split across submitters at close
@@ -20,7 +20,7 @@ class Restaurant(models.Model):
 
 
 class MenuItem(models.Model):
-    id = models.CharField(primary_key=True, max_length=80, default=gen_id)
+    id = models.CharField(primary_key=True, max_length=80, default=gen_id, editable=False)
     restaurant = models.ForeignKey(Restaurant, related_name='menu', on_delete=models.CASCADE)
     name = models.CharField(max_length=200)
     arabic = models.CharField(max_length=200, null=True, blank=True)
@@ -37,7 +37,7 @@ class MenuItem(models.Model):
 
 
 class Session(models.Model):
-    id = models.CharField(primary_key=True, max_length=64, default=gen_id)
+    id = models.CharField(primary_key=True, max_length=64, default=gen_id, editable=False)
     restaurant = models.ForeignKey(Restaurant, related_name='sessions', on_delete=models.PROTECT)
     started_by = models.CharField(max_length=80)
     status = models.CharField(max_length=16, default='open')  # open | closed
@@ -63,7 +63,7 @@ class Session(models.Model):
 
 
 class Order(models.Model):
-    id = models.CharField(primary_key=True, max_length=64, default=gen_id)
+    id = models.CharField(primary_key=True, max_length=64, default=gen_id, editable=False)
     session = models.ForeignKey(Session, related_name='orders', on_delete=models.CASCADE)
     person = models.CharField(max_length=80)
     paid = models.BooleanField(default=False)  # the entire "payment" surface
@@ -80,7 +80,7 @@ class Order(models.Model):
 
 
 class OrderLine(models.Model):
-    id = models.CharField(primary_key=True, max_length=64, default=gen_id)
+    id = models.CharField(primary_key=True, max_length=64, default=gen_id, editable=False)
     order = models.ForeignKey(Order, related_name='lines', on_delete=models.CASCADE)
     menu_item = models.ForeignKey(MenuItem, related_name='order_lines', on_delete=models.PROTECT)
     qty = models.IntegerField()

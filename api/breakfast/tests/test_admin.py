@@ -2,12 +2,51 @@
 People view aggregates, and — critically — enabling admin middleware did not
 break the cookie-auth API (ninja views stay csrf_exempt)."""
 import json
+import re
+from html.parser import HTMLParser
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 
 from breakfast.models import MenuItem, Order, OrderLine, Restaurant, Session
+
+
+class _FormParser(HTMLParser):
+    """Collect a rendered form's submittable fields, as a browser would."""
+
+    def __init__(self):
+        super().__init__()
+        self.fields = {}
+        self._select = None
+        self._chosen = False
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == 'input' and a.get('name'):
+            t = a.get('type', 'text')
+            if t == 'checkbox':
+                if 'checked' in a:
+                    self.fields[a['name']] = a.get('value', 'on')
+            elif t not in ('submit', 'button'):
+                self.fields[a['name']] = a.get('value', '')
+        elif tag == 'select' and a.get('name'):
+            self._select, self._chosen = a['name'], False
+        elif tag == 'option' and self._select and not self._chosen and 'selected' in a:
+            self.fields[self._select] = a.get('value', '')
+            self._chosen = True
+
+    def handle_endtag(self, tag):
+        if tag == 'select':
+            self._select = None
+
+
+def roundtrip_save(client: Client, url: str):
+    """GET an admin change form and POST it straight back, like pressing Save."""
+    parser = _FormParser()
+    parser.feed(client.get(url).content.decode())
+    data = {k: v for k, v in parser.fields.items() if k != 'csrfmiddlewaretoken'}
+    return client.post(url, data)
 
 CHANGELISTS = [
     'breakfast_restaurant',
@@ -59,6 +98,19 @@ class AdminSmokeTests(TestCase):
         res = self.c.get(reverse('admin:breakfast_restaurant_change', args=[self.r.id]))
         self.assertEqual(res.status_code, 200)
         self.assertContains(res, 'Foul')
+
+    def test_change_forms_with_inlines_actually_SAVE(self):
+        # regression: editable CharField PKs + inline fields=(...) made Django
+        # demand a hidden id it never rendered — every inline save 403'd into
+        # an invisible "Please correct the errors below."
+        for name, obj in [('restaurant', self.r), ('session', self.s), ('order', self.o)]:
+            url = reverse(f'admin:breakfast_{name}_change', args=[obj.pk])
+            res = roundtrip_save(self.c, url)
+            self.assertEqual(res.status_code, 302, f'{name} save did not redirect (form errors)')
+
+    def test_inline_pk_hidden_fields_are_rendered(self):
+        html = self.c.get(reverse('admin:breakfast_restaurant_change', args=[self.r.id])).content.decode()
+        self.assertIsNotNone(re.search(r'name="menu-0-id"[^>]*value=".+"', html) or re.search(r'value=".+"[^>]*name="menu-0-id"', html), 'hidden inline pk input missing')
 
     def test_session_change_page_with_orders_inline(self):
         res = self.c.get(reverse('admin:breakfast_session_change', args=[self.s.id]))
