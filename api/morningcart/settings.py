@@ -1,4 +1,5 @@
-"""Django settings for MorningCart — a lean JSON API (Django Ninja), no admin/auth/sessions."""
+"""Django settings for MorningCart — a lean JSON API (Django Ninja) plus the
+Django admin as the back office (users, restaurants, menus, sessions, orders)."""
 import os
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
@@ -22,31 +23,76 @@ if not SECRET_KEY:
         )
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
+if not DEBUG and ALLOWED_HOSTS == ['*']:
+    import sys
+
+    print(
+        'WARNING: ALLOWED_HOSTS is "*" with DEBUG=false — fine on a trusted LAN, '
+        'set ALLOWED_HOSTS explicitly for anything internet-facing.',
+        file=sys.stderr,
+    )
+# Needed when the admin is used through an HTTPS tunnel/proxy origin,
+# e.g. CSRF_TRUSTED_ORIGINS=https://breakfast.example.com
+CSRF_TRUSTED_ORIGINS = [o for o in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if o]
+# Trust nginx's forwarded scheme so secure-cookie logic works behind HTTPS proxies.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Office-local time for the daily service date (YYYY-MM-DD).
 OFFICE_TZ = os.environ.get('OFFICE_TZ', 'Africa/Cairo')
-# Set true when serving over HTTPS so the identity cookie is never sent in clear.
+# Set true when serving over HTTPS so cookies are never sent in clear.
 COOKIE_SECURE = os.environ.get('COOKIE_SECURE', 'false').lower() == 'true'
+SESSION_COOKIE_SECURE = COOKIE_SECURE
+CSRF_COOKIE_SECURE = COOKIE_SECURE
 
-# 'ninja' is installed only so APP_DIRS template loading finds the Swagger UI
-# templates for /api/docs.
-INSTALLED_APPS = ['ninja', 'breakfast']
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'ninja',  # template discovery for /api/docs (Swagger UI)
+    'breakfast',
+]
 
-# Minimal: no sessions/auth/CSRF middleware — identity is a custom signed cookie,
-# CSRF is mitigated by SameSite=Strict + same-origin serving (see breakfast/auth.py).
-MIDDLEWARE = []
+# The API stays cookie-light: ninja views are csrf_exempt at the middleware
+# level (CSRF for the mc_user cookie is mitigated by SameSite=Strict +
+# same-origin serving — see breakfast/auth.py). The middleware below exists
+# for the Django admin: real sessions, real CSRF, real auth.
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
 
 ROOT_URLCONF = 'morningcart.urls'
 WSGI_APPLICATION = 'morningcart.wsgi.application'
 
-# Required for the interactive /api/docs page (django-ninja renders a template).
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        # project-level dir wins over app templates — admin branding lives here
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
-        'OPTIONS': {},
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
     }
+]
+
+AUTH_PASSWORD_VALIDATORS = [
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator', 'OPTIONS': {'min_length': 10}},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
 ]
 
 
@@ -74,8 +120,13 @@ USE_TZ = True
 TIME_ZONE = 'UTC'
 USE_I18N = False
 
-# We don't serve Django static; nginx serves the web build.
+# whitenoise serves the admin's static files straight from gunicorn —
+# no nginx config or separate static host needed.
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+}
 
 # Errors must be visible with DEBUG=false too (Django's default console handler
 # is gated on require_debug_true, which leaves production 500s traceless).

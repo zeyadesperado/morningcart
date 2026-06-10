@@ -39,8 +39,8 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Money invariant (hypothesis property tests, no DB)
         run: python -m unittest breakfast.tests.test_domain -v
-      - name: Endpoint tests
-        run: python manage.py test breakfast.tests.test_api -v 1
+      - name: Endpoint + admin tests
+        run: python manage.py test breakfast -v 1
 
   web:
     name: Web · typecheck + fast-check + build

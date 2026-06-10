@@ -15,6 +15,9 @@ class Restaurant(models.Model):
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def __str__(self):
+        return self.name
+
 
 class MenuItem(models.Model):
     id = models.CharField(primary_key=True, max_length=80, default=gen_id)
@@ -28,6 +31,9 @@ class MenuItem(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=['restaurant'])]
+
+    def __str__(self):
+        return self.name
 
 
 class Session(models.Model):
@@ -52,6 +58,9 @@ class Session(models.Model):
         ]
         indexes = [models.Index(fields=['restaurant', 'status'])]
 
+    def __str__(self):
+        return f'{self.service_date} · {self.restaurant_id} · {self.status}'
+
 
 class Order(models.Model):
     id = models.CharField(primary_key=True, max_length=64, default=gen_id)
@@ -66,6 +75,9 @@ class Order(models.Model):
         ]
         indexes = [models.Index(fields=['session'])]
 
+    def __str__(self):
+        return f'{self.person} ({"paid" if self.paid else "unpaid"})'
+
 
 class OrderLine(models.Model):
     id = models.CharField(primary_key=True, max_length=64, default=gen_id)
@@ -78,3 +90,24 @@ class OrderLine(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=['order'])]
+
+
+class PersonStats(models.Model):
+    """Read-only "users" surface for the admin. The app has no user table —
+    people are names on orders — so this is a SQL VIEW aggregating them
+    (created in migration 0003)."""
+    name = models.CharField(primary_key=True, max_length=80)
+    orders_count = models.IntegerField()
+    mornings = models.IntegerField()
+    unpaid_count = models.IntegerField()  # closed sessions, still unpaid
+    items_total = models.BigIntegerField()  # piasters, excl. delivery shares
+    last_seen = models.DateTimeField(null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'breakfast_person_stats'
+        verbose_name = 'person'
+        verbose_name_plural = 'people'
+
+    def __str__(self):
+        return self.name

@@ -31,6 +31,12 @@ services:
       # Safe on every restart: seed is a no-op when data already exists
       # (wipe + reseed explicitly with: docker compose exec api python manage.py seed --force)
       SEED_ON_BOOT: "true"
+      # Django admin at /admin — set both to auto-create the superuser on boot
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # Required for admin logins through an HTTPS tunnel/proxy origin,
+      # e.g. CSRF_TRUSTED_ORIGINS=https://breakfast.example.com
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
     depends_on:
       db:
         condition: service_healthy

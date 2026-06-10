@@ -1,0 +1,45 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} · {% endif %}{{ title }} · MorningCart{% endblock %}
+
+{% block branding %}
+<div id="site-name">
+  <a href="{% url 'admin:index' %}">🌅 MorningCart <span style="opacity:.55;font-weight:400">· the back office</span></a>
+</div>
+{% endblock %}
+
+{% block extrastyle %}
+<style>
+  /* the morning counter, translated to admin CSS vars */
+  :root {
+    --primary: #A1431E;
+    --secondary: #2A2018;
+    --accent: #C68A2E;
+    --header-bg: #2A2018;
+    --header-color: #F4ECDB;
+    --header-branding-color: #FFFDF8;
+    --header-link-color: #F4ECDB;
+    --breadcrumbs-bg: #A1431E;
+    --breadcrumbs-fg: #F6E7DC;
+    --breadcrumbs-link-fg: #FFFDF8;
+    --link-fg: #A1431E;
+    --link-hover-color: #C0552B;
+    --button-bg: #A1431E;
+    --button-hover-bg: #8C3A1A;
+    --default-button-bg: #2A2018;
+    --default-button-hover-bg: #46402F;
+    --object-tools-bg: #2A2018;
+    --object-tools-hover-bg: #46402F;
+  }
+  html[data-theme="light"], :root {
+    --body-bg: #F4ECDB;
+    --darkened-bg: #EFE6D2;
+    --selected-bg: #F6E7DC;
+    --selected-row: #F6E7DC;
+    --hairline-color: #E3D6BE;
+    --border-color: #D2C2A4;
+  }
+  #site-name a { font-family: Georgia, 'Times New Roman', serif; letter-spacing: -0.01em; }
+  #content h1 { font-family: Georgia, 'Times New Roman', serif; }
+</style>
+{% endblock %}

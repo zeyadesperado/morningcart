@@ -212,6 +212,39 @@ errors return `{ "error": "..." }`. Interactive docs at `/api/docs`.
   (over-length names, unknown item kinds, out-of-range quantities) returns a JSON `422`,
   never an HTML 500.
 
+## Admin — the back office
+
+The **Django admin** lives at **`/admin`** (real auth — username/password, sessions, CSRF —
+fully separate from the app's pick-your-name cookie). It covers everything the app keeps
+simple on purpose:
+
+- **Restaurants & menus** — bulk edits, inline menu editing, EGP-formatted prices,
+  availability/sort toggles from the list, soft-delete **and restore**, guarded against
+  deleting a restaurant mid-breakfast.
+- **Sessions** — money columns (items / delivery / grand total from the fee snapshot),
+  open/closed badges, date drill-down, inline orders, and guarded bulk actions:
+  close (skips empty), reopen (override), delete empty.
+- **Orders** — search by person/item/on-behalf name, toggle paid from the list, edit lines.
+- **People** — the app has no user table (people are names on orders), so a SQL view
+  aggregates them: mornings, orders, **unpaid count**, items total, last seen, with a
+  one-click jump to their orders.
+
+```bash
+# local: create the superuser once, then http://localhost:4000/admin
+cd api && .venv/bin/python manage.py createsuperuser
+
+# docker: set both and the entrypoint creates/updates it on every boot
+ADMIN_USERNAME=boss ADMIN_PASSWORD=... COOKIE_SECRET=... docker compose up --build
+```
+
+Static files are served by whitenoise straight from gunicorn; in the compose stack nginx
+proxies `/admin/` and `/static/`, so the admin is at `http://localhost:8080/admin` too
+(the login endpoint is **rate-limited in nginx** — Django ships no brute-force protection).
+Behind an HTTPS tunnel set `CSRF_TRUSTED_ORIGINS=https://your-host` and `COOKIE_SECURE=true`.
+The JSON API is untouched by all this — ninja views stay CSRF-exempt at the middleware
+level (the `mc_user` cookie keeps its SameSite=Strict posture). Note the two logins are
+independent: signing out of the app doesn't sign you out of `/admin` and vice versa.
+
 ## Getting started (Docker)
 
 ```bash
