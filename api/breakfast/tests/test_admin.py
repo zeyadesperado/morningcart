@@ -39,6 +39,12 @@ class AdminSmokeTests(TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertContains(res, 'MorningCart')
 
+    def test_bare_admin_redirects_to_slash(self):
+        # people type /admin — APPEND_SLASH (CommonMiddleware) must rescue it
+        res = self.c.get('/admin')
+        self.assertEqual(res.status_code, 301)
+        self.assertTrue(res.headers['Location'].endswith('/admin/'))
+
     def test_every_changelist_loads(self):
         for name in CHANGELISTS:
             res = self.c.get(reverse(f'admin:{name}_changelist'))
